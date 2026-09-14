@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Schoolbox UX Tweaks",
+  "version": "1.0.0",
+  "description": "Small UX improvements for staff using Schoolbox.",
+  "permissions": ["storage", "activeTab", "tabs"],
+  "host_permissions": [
+    "https://my.careywa.au/*",
+    "https://*.r2.cloudflarestorage.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Schoolbox UX tweaks"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://my.careywa.au/*"],
+      "js": ["main-world-bridge.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://my.careywa.au/*"],
+      "css": ["styles.css"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["vendor/pdfjs/pdf.mjs", "vendor/pdfjs/pdf.worker.mjs"],
+      "matches": ["https://my.careywa.au/*"]
+    }
+  ]
+}

@@ -1,0 +1,492 @@
+/*
+  Pure CSS tweaks go here.
+  Anything doable with CSS alone (hiding elements, resizing,
+  recoloring, reflowing) is cheaper and more reliable than JS.
+
+  Example: hide a sidebar widget you never use.
+  Replace the selector with the real one from Schoolbox's markup
+  (right-click the element -> Inspect -> copy its class/id).
+*/
+
+/*
+.some-widget-class {
+  display: none !important;
+}
+*/
+
+.my-added-links {
+  margin-top: 4px;
+  font-size: 0.85em;
+}
+
+.my-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px 0;
+}
+
+.my-quick-action-button {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 0.85em;
+  border: 1px solid rgb(30, 105, 128);
+  border-radius: 4px;
+  color: rgb(30, 105, 128);
+  text-decoration: none;
+}
+
+.my-quick-action-button:hover {
+  background: rgb(212, 229, 232);
+}
+
+/* Smaller variant for the "My Classes" grid, where cards are narrow
+   and already carry a code/meta line the buttons sit under. */
+.my-quick-action-button--small {
+  padding: 2px 8px;
+  font-size: 0.75em;
+}
+
+.my-quick-links {
+  margin: 6px 0 0 0;
+}
+
+/*
+  Attempt to un-rotate the diagonal markbook headers was reverted -
+  it made the header row disappear entirely rather than just
+  straightening it. The rotation is tied into a fixed-height
+  container (see --markbook-height-offset), so this needs more
+  investigation before trying again, not a blind CSS override.
+*/
+
+.my-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  margin: 0 0 12px 0;
+  font-size: 0.9em;
+  border: 1px solid rgb(30, 105, 128);
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(30, 105, 128);
+  cursor: pointer;
+}
+
+.my-filter-toggle:hover {
+  background: rgb(212, 229, 232);
+}
+
+.my-filter-toggle--active {
+  background: rgb(30, 105, 128);
+  color: white;
+}
+
+/*
+  Give sortable Markbook column headers a pointer cursor. No visual
+  sort-arrow indicator is added here deliberately - that would touch
+  the same rotated-header area that broke badly last time it was
+  restyled, so this stays purely functional.
+*/
+.my-sortable-header {
+  cursor: pointer;
+}
+
+/*
+  Let the markbook table render at full height instead of being
+  capped to fit the viewport with its own internal scrollbar. The
+  page will scroll instead.
+*/
+.diagonal-headings-table-container {
+  max-height: none !important;
+  overflow-y: visible !important;
+}
+
+/*
+  Force black text on the shaded bucket columns, overriding
+  Schoolbox's own grade-based text colour (green/orange/red), so the
+  number stays readable against the tinted background.
+*/
+.my-bucket-shaded,
+.my-bucket-shaded span {
+  color: #000 !important;
+}
+
+/*
+  Dropdown panel with the "other apps" links. Appended straight to
+  <body> and positioned "fixed" using coordinates computed from the
+  nav button's on-screen position (set inline in JS), rather than
+  nested inside the nav <li> with position: absolute - the nav bar
+  or one of its ancestors clips overflowing content, which silently
+  hid the panel even though it existed in the DOM.
+*/
+.my-nav-panel {
+  position: fixed;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 999999;
+}
+
+.my-nav-panel-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  margin: 0;
+  color: #222;
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.my-nav-panel-link:hover {
+  background: #f5f5f5;
+}
+
+.my-nav-panel-link-name {
+  flex: 1;
+}
+
+.my-nav-panel-link-arrow {
+  font-size: 11px;
+  color: #999;
+}
+
+.my-nav-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e5e5e5;
+  font-size: 13px;
+}
+
+.my-nav-switch {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+}
+
+.my-nav-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.my-nav-slider {
+  position: absolute;
+  inset: 0;
+  background: #ccc;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.my-nav-slider::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  left: 2px;
+  top: 2px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+}
+
+.my-nav-switch input:checked + .my-nav-slider {
+  background: rgb(30, 105, 128);
+}
+
+.my-nav-switch input:checked + .my-nav-slider::before {
+  transform: translateX(14px);
+}
+
+.my-nav-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  border-bottom: 1px solid #e5e5e5;
+  background: transparent;
+  font-size: 13px;
+  color: #555;
+  cursor: pointer;
+  text-align: left;
+}
+
+.my-nav-folder-row:hover {
+  background: #f5f5f5;
+}
+
+.my-nav-folder-label {
+  flex: 1;
+}
+
+.my-nav-chevron {
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.my-nav-chevron--open {
+  transform: rotate(180deg);
+}
+
+.my-nav-apps-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.my-nav-apps-list[hidden] {
+  display: none;
+}
+
+.my-nav-panel-footer {
+  padding: 9px 14px;
+  font-size: 11px;
+  color: #999;
+}
+
+/*
+  Schoolbox runs a script over every <li> in #top-menu that sets an
+  inline display style based on the account's permissions (visible
+  items get "list-item", everything else gets "none"). Our button has
+  no data-id for that script to recognise, so it silently defaults to
+  hidden. The script uses a plain inline style with no !important, so
+  a stylesheet rule with !important reliably wins over it regardless
+  of when either one runs.
+*/
+#my-nav-button {
+  display: list-item !important;
+}
+
+.my-flag-filter-wrap {
+  margin: 12px 0 16px 0;
+}
+
+.my-flag-filter-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px 0;
+  font-size: 0.8em;
+  color: rgb(102, 102, 102);
+}
+
+.my-flag-filter-mode-switch {
+  display: inline-flex;
+  border: 1px solid rgb(30, 105, 128);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.my-flag-filter-remember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+}
+
+.my-flag-filter-mode-button {
+  padding: 4px 10px;
+  font-size: 0.95em;
+  border: none;
+  background: white;
+  color: rgb(30, 105, 128);
+  cursor: pointer;
+}
+
+.my-flag-filter-mode-button:not(:last-child) {
+  border-right: 1px solid rgb(30, 105, 128);
+}
+
+.my-flag-filter-mode-button--active {
+  background: rgb(30, 105, 128);
+  color: white;
+}
+
+.my-flag-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/*
+  Solid vs outlined is the on/off state itself - no separate icon or
+  checkbox needed to tell whether a category is currently included.
+*/
+.my-flag-filter-pill {
+  padding: 5px 14px;
+  border-radius: 14px;
+  font-size: 0.85em;
+  border: 1.5px solid rgb(180, 180, 180);
+  background: transparent;
+  color: rgb(120, 120, 120);
+  cursor: pointer;
+}
+
+.my-flag-filter-pill--active {
+  border-color: rgb(30, 105, 128);
+  background: rgb(30, 105, 128);
+  color: white;
+}
+
+.my-flag-filter-text-button {
+  padding: 5px 4px;
+  font-size: 0.85em;
+  border: none;
+  background: transparent;
+  color: rgb(30, 105, 128);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/*
+  Same red Schoolbox itself uses for alert-type flags/icons
+  (--sbx-color-alert, #fa4a47 fallback), so this reads as consistent
+  with the site's own colour language rather than something bolted
+  on from outside.
+*/
+.my-avatar-ring--danger {
+  box-shadow: 0 0 0 3px #fa4a47;
+  border-radius: 6px;
+}
+
+/* Same amber already used for the active PMI badge, so the palette
+   stays tight rather than introducing a third accent colour. */
+.my-avatar-ring--warning {
+  box-shadow: 0 0 0 3px rgb(248, 150, 30);
+  border-radius: 6px;
+}
+
+/*
+  !important because the table row may otherwise get its own
+  background from Schoolbox's own zebra-striping/hover/selected
+  styles, which would silently win over a plain background-color.
+*/
+.my-row-tint--danger {
+  background-color: rgba(250, 74, 71, 0.07) !important;
+}
+
+.my-attention-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px 0;
+}
+
+.my-attention-tag {
+  font-size: 0.78em;
+  line-height: 1.4;
+}
+
+.my-attention-tag--danger {
+  color: #a32d2d;
+  font-weight: 600;
+}
+
+.my-attention-tag--warning {
+  color: rgb(133, 79, 11);
+  font-weight: 600;
+}
+
+.my-attention-tag--info {
+  color: rgb(83, 74, 183);
+}
+
+/*
+  Positions the PMI badge relative to the portrait it's attached to.
+  Inline-block so it doesn't disturb the table cell's own layout.
+*/
+.my-pmi-avatar-wrap {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+.my-pmi-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px white;
+}
+
+/* Same colours Schoolbox already uses for its own "PMI Request"
+   flags, so this reads as consistent with the site rather than as
+   something this extension bolted on. */
+.my-pmi-badge--active {
+  background: rgb(253, 224, 189);
+  color: rgb(248, 150, 30);
+}
+
+/* Same neutral colours Schoolbox uses for its own zero-weight
+   flags, so a current level of 0 reads as "nothing to see" rather
+   than drawing the eye the way the active colour does. */
+.my-pmi-badge--zero {
+  background: rgb(221, 221, 221);
+  color: rgb(71, 71, 71);
+}
+
+.my-relief-check-button {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.my-relief-check-button:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.my-relief-check-button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.my-relief-check-button.my-relief-checked {
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgb(71, 71, 71);
+}
+
+/* Same alert red the site already uses for its own "Medical Alert"
+   styling elsewhere, so this reads as a serious/urgent marker rather
+   than an arbitrary colour this extension invented. */
+.my-relief-cover {
+  border: 2px solid var(--color-alert, #ea0a06) !important;
+  box-sizing: border-box;
+}
+
+.my-relief-cover-banner {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-alert, #ea0a06);
+  background: rgba(234, 10, 6, 0.08);
+  padding: 2px 4px;
+  margin-bottom: 4px;
+  border-radius: 2px;
+}
+

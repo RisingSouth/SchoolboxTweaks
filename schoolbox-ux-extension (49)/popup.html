@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Schoolbox UX tweaks</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="header">
+    <p class="title">Schoolbox UX tweaks</p>
+  </div>
+
+  <div class="row">
+    <span>Enable tweaks</span>
+    <label class="switch">
+      <input type="checkbox" id="enabled-toggle" />
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <button type="button" class="folder-row" id="apps-folder-toggle">
+    <span class="folder-icon">&#128193;</span>
+    <span class="folder-label">Other apps</span>
+    <span class="chevron" id="apps-chevron">&#9662;</span>
+  </button>
+
+  <div class="apps-list" id="apps-list" hidden>
+    <a class="app-link" href="https://markflow.com.au" target="_blank" rel="noopener">
+      <span class="app-name">Markflow</span>
+      <span class="app-external">&#8599;</span>
+    </a>
+    <a class="app-link" href="https://www.observenotes.com" target="_blank" rel="noopener">
+      <span class="app-name">Observe</span>
+      <span class="app-external">&#8599;</span>
+    </a>
+    <a class="app-link" href="https://risingsouth.github.io/seatingchart/" target="_blank" rel="noopener">
+      <span class="app-name">Seat</span>
+      <span class="app-external">&#8599;</span>
+    </a>
+  </div>
+
+  <div class="footer">
+    <p>v1.0</p>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
