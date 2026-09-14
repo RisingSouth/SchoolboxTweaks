@@ -77,4 +77,4 @@ is published.
 
 ## Contact
 
-Questions about this policy can be sent to: info@markflow.com.au
+Questions about this policy can be sent to: markflowau@gmail.com
