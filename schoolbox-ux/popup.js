@@ -25,6 +25,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  document.getElementById("settings-button").addEventListener("click", () => {
+    // The popup is itself an extension page, so unlike the nav
+    // dropdown's Settings row (a content script) this can call
+    // openOptionsPage() directly - no background relay needed.
+    chrome.runtime.openOptionsPage();
+  });
+
   folderButton.addEventListener("click", () => {
     const isHidden = appsList.hidden;
     appsList.hidden = !isHidden;

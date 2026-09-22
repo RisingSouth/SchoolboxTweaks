@@ -5,19 +5,43 @@
 (function () {
   "use strict";
 
+  // Populated from chrome.storage.sync before applyTweaks() first
+  // runs (see the bottom of this file) - defaults to everything on
+  // so a fresh install/update behaves exactly like before individual
+  // toggles existed.
+  let tweakToggles = buildDefaultTweakToggles();
+
+  // Each tweak's own top-level call is gated here, in one place,
+  // rather than inside each function - a single choke point is much
+  // harder to let drift out of sync with tweak-config.js than
+  // editing 14 separate function bodies would be. Toggling a tweak
+  // off just means its call is skipped this pass; each function's
+  // own "have I already done this?" guard doesn't need to know
+  // anything changed.
   function applyTweaks() {
-    addClassListAndMarkbookLinks();
-    addQuickActionsOnClassHomepage();
-    hideRedundantHeading();
-    addFilterToggleOnMarkbook();
-    addSortableMarkbookColumns();
-    addAssessmentTypeShading();
-    addQuickLinksOnClassesPage();
-    addPastoralFlagFilter();
-    addPmiBadges();
-    addStudentAttentionTags();
-    reorganiseClassListColumns();
-    addCheckForReliefButton();
+    if (tweakToggles.dashboardLinks) addClassListAndMarkbookLinks();
+    if (tweakToggles.classHomeQuickActions) addQuickActionsOnClassHomepage();
+    if (tweakToggles.classHomeSeat) addSeatWidgetOnClassHomepage();
+    if (tweakToggles.markbookHeading) hideRedundantHeading();
+    if (tweakToggles.markbookFilters) addFilterToggleOnMarkbook();
+    if (tweakToggles.markbookSort) addSortableMarkbookColumns();
+    if (tweakToggles.markbookShading) addAssessmentTypeShading();
+    if (tweakToggles.classesGridQuickLinks) addQuickLinksOnClassesPage();
+    if (tweakToggles.classListFlagFilter) addPastoralFlagFilter();
+    if (tweakToggles.classListPmiBadge) addPmiBadges();
+    if (tweakToggles.classListAttentionTags) addStudentAttentionTags();
+    if (tweakToggles.classListColumnReorg) reorganiseClassListColumns();
+    if (tweakToggles.dashboardRelief) addCheckForReliefButton();
+    if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
+    if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
+    if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
+
+    // Pure-CSS tweak (see styles.css) - toggled via a body class
+    // rather than a call to skip, since there's no DOM to build.
+    document.body.classList.toggle(
+      "my-tweak-full-height-table",
+      !!tweakToggles.markbookFullHeight
+    );
   }
 
   // The Class List page's pastoral-flags row for each student is a
@@ -124,6 +148,20 @@
       toggleRow.appendChild(switchLabel);
       panel.appendChild(toggleRow);
 
+      // chrome.runtime.openOptionsPage() can't be called from a
+      // content script (extension-process-only API), so this goes
+      // through background.js the same way the PDF/Seat fetches do.
+      const settingsRow = document.createElement("button");
+      settingsRow.type = "button";
+      settingsRow.className = "my-nav-panel-row my-nav-settings-row";
+      settingsRow.textContent = "Settings";
+      settingsRow.addEventListener("click", () => {
+        chrome.runtime.sendMessage({ type: "OPEN_OPTIONS_PAGE" });
+      });
+      panel.appendChild(settingsRow);
+
+      buildDutiesSection(panel);
+
       const folderButton = document.createElement("button");
       folderButton.type = "button";
       folderButton.className = "my-nav-folder-row";
@@ -184,7 +222,7 @@
 
       const footer = document.createElement("div");
       footer.className = "my-nav-panel-footer";
-      footer.textContent = "v1.0";
+      footer.textContent = "v1.2";
       panel.appendChild(footer);
 
       document.body.appendChild(panel);
@@ -448,6 +486,240 @@
     }
   }
 
+  // ---------------------------------------------------------------
+  // Class homepage: embedded seating chart ("Seat")
+  //
+  // Adds a "Seating chart" button next to the existing quick-actions
+  // row that opens Seat (risingsouth.github.io) inline in an iframe.
+  // Seat detects being embedded (window.self !== window.top) and,
+  // instead of its own localStorage, talks to this extension via
+  // postMessage - one room per Schoolbox class, keyed by the class's
+  // numeric id (already available from the Class List quick-action
+  // link, so no separate lookup is needed).
+  //
+  // SAVE and LOAD are both driven directly by Schoolbox's own state -
+  // no browser-local memory of "the current file" anywhere, so this
+  // works identically for any staff member on any device, not just
+  // whoever saved last.
+  //
+  // Confirmed directly from a real Manage Files page's HTML (not
+  // guessed, not inferred from the compiled Vue component): the file
+  // list is NOT a separate request at all - it's server-rendered
+  // straight into that page's HTML, already sorted newest-first, one
+  // <a title="{description}" href="/send.php?id={id}"> per file. So
+  // finding "the current Seat layout for this class" is just: fetch
+  // that class's Manage Files page, parse it, find the link whose
+  // title matches, read the id out of its href. Same fetch-a-page-
+  // and-parse-it technique already used for the bulletin PDF.
+  //
+  // Delete shape and the real hide mechanism (a separate PATCH to the
+  // file's own visibilityUrl with a JSON body, confirmed the create
+  // request's own hidden field does nothing) were both confirmed from
+  // the real Manage Files component source.
+  // ---------------------------------------------------------------
+
+  const SEAT_URL = "https://risingsouth.github.io/seatingchart/";
+  const SEAT_LAYOUT_DESCRIPTION = "Seat Layout — do not delete";
+  const SEAT_FOLDER_URL_PREFIX = "/resources/folder/files/";
+
+  // Relies on the :files array already being newest-first (confirmed
+  // directly from a real raw response) - if a save is ever seen to
+  // load stale, this ordering assumption is the first thing to
+  // re-check.
+  // The raw fetched HTML is the pre-hydration server template, not
+  // the rendered page - there are no real <a> tags for files anywhere
+  // in it (those only get built by Vue, client-side, after the page
+  // loads and its JS runs, which a plain fetch() never triggers).
+  // Confirmed directly from the real raw response: the whole file
+  // list is already sitting there as JSON in the <view-all-files>
+  // custom element's :files attribute, which is what this reads.
+  function findSeatLayoutFile(classId) {
+    return fetch(SEAT_FOLDER_URL_PREFIX + classId, {
+      credentials: "same-origin",
+      cache: "no-store",
+    })
+      .then((res) => {
+        console.log("[my-seat] folder fetch status", res.status, SEAT_FOLDER_URL_PREFIX + classId);
+        return res.ok ? res.text() : null;
+      })
+      .then((html) => {
+        if (!html) {
+          console.log("[my-seat] folder fetch returned no HTML");
+          return null;
+        }
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const el = doc.querySelector("view-all-files");
+        const filesAttr = el && el.getAttribute(":files");
+        console.log("[my-seat] view-all-files element found?", !!el, "has :files attr?", !!filesAttr);
+        if (!filesAttr) return null;
+
+        let files;
+        try {
+          files = JSON.parse(filesAttr);
+        } catch (e) {
+          console.log("[my-seat] :files JSON.parse failed", e);
+          return null;
+        }
+
+        const match = files.find((f) => f.name === SEAT_LAYOUT_DESCRIPTION);
+        console.log("[my-seat] matching file found?", !!match, match && match.id);
+        return match ? String(match.id) : null;
+      })
+      .catch((err) => {
+        console.log("[my-seat] findSeatLayoutFile error", err);
+        return null;
+      });
+  }
+
+  // /send.php?id=X redirects to a signed, CORS-less R2 URL - the
+  // same wall the bulletin PDF fetch hit (see background.js) - so
+  // this has to go through the background worker rather than a
+  // direct content-script fetch().
+  function loadSeatLayout(classId) {
+    return findSeatLayoutFile(classId).then((fileId) => {
+      if (!fileId) {
+        console.log("[my-seat] no existing file id, loading blank");
+        return null;
+      }
+      return new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "FETCH_TEXT", url: `${location.origin}/send.php?id=${fileId}` },
+          (response) => {
+            console.log("[my-seat] background file fetch ok?", response && response.ok);
+            if (!response || !response.ok) {
+              resolve(null);
+              return;
+            }
+            try {
+              resolve(JSON.parse(response.text));
+            } catch (e) {
+              console.log("[my-seat] JSON.parse failed", e, response.text.slice(0, 200));
+              resolve(null);
+            }
+          }
+        );
+      });
+    });
+  }
+
+  function uploadSeatLayout(classId, room) {
+    return findSeatLayoutFile(classId).then((previousFileId) => {
+      const formData = new FormData();
+      formData.append("description", SEAT_LAYOUT_DESCRIPTION);
+      formData.append("category", classId);
+      formData.append("comment", "");
+      formData.append(
+        "file",
+        new Blob([JSON.stringify(room)], { type: "text/plain" }),
+        "seat-layout.txt"
+      );
+
+      return fetch("/cms/fileForm.php?ajax=1", {
+        method: "POST",
+        credentials: "same-origin",
+        body: formData,
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!data || !data.id) return false;
+
+          const hidePromise = data.visibilityUrl
+            ? fetch(data.visibilityUrl, {
+                method: "PATCH",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ hidden: true }),
+              }).catch(() => null)
+            : Promise.resolve(null);
+
+          return hidePromise.then(() => {
+            if (previousFileId && previousFileId !== String(data.id)) {
+              fetch(
+                "/cms/fileForm.php?" +
+                  new URLSearchParams({ ajax: "1", delete: previousFileId }),
+                {
+                  method: "DELETE",
+                  credentials: "same-origin",
+                  headers: { "Content-Type": "application/json" },
+                }
+              ).catch(() => null);
+            }
+            return true;
+          });
+        })
+        .catch(() => false);
+    });
+  }
+
+  function addSeatWidgetOnClassHomepage() {
+    if (!window.location.pathname.startsWith("/homepage/")) return;
+    if (document.querySelector(".my-seat-toggle")) return;
+
+    const bar = document.querySelector(".my-quick-actions");
+    if (!bar) return;
+
+    const classListLink = Array.from(bar.querySelectorAll("a")).find(
+      (a) => a.textContent.trim() === "Class List"
+    );
+    const hrefMatch =
+      classListLink &&
+      classListLink.getAttribute("href").match(/\/learning\/class\/(\d+)/);
+    if (!hrefMatch) return;
+    const classId = hrefMatch[1];
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "my-quick-action-button my-seat-toggle";
+    toggle.textContent = "Seating chart";
+    bar.appendChild(toggle);
+
+    const container = document.createElement("div");
+    container.className = "my-seat-container";
+    container.hidden = true;
+    bar.insertAdjacentElement("afterend", container);
+
+    let iframe = null;
+
+    toggle.addEventListener("click", () => {
+      const opening = container.hidden;
+      container.hidden = !opening;
+      if (!opening || iframe) return;
+
+      iframe = document.createElement("iframe");
+      iframe.className = "my-seat-iframe";
+      iframe.src = SEAT_URL;
+      container.appendChild(iframe);
+
+      window.addEventListener("message", (event) => {
+        if (!iframe || event.source !== iframe.contentWindow) return;
+        console.log("[my-seat] message from iframe", event.data);
+        if (!event.data || typeof event.data !== "object") return;
+
+        if (event.data.type === "SEAT_READY") {
+          console.log("[my-seat] SEAT_READY received for class", classId);
+          loadSeatLayout(classId).then((room) => {
+            console.log("[my-seat] replying SEAT_LOAD", room);
+            if (iframe) {
+              iframe.contentWindow.postMessage(
+                { type: "SEAT_LOAD", room },
+                "*"
+              );
+            }
+          });
+        } else if (event.data.type === "SEAT_SAVE") {
+          uploadSeatLayout(classId, event.data.room).then((ok) => {
+            if (iframe) {
+              iframe.contentWindow.postMessage(
+                { type: "SEAT_SAVE_RESULT", ok },
+                "*"
+              );
+            }
+          });
+        }
+      });
+    });
+  }
+
   // On the "My Classes" grid (/learning/classes), each card's own
   // "Class Actions" dropdown already has direct numeric-ID links for
   // Class List and Markbook - unlike the timetable boxes, no
@@ -494,24 +766,6 @@
     });
   }
 
-  // Schoolbox is set up as an installable PWA (registered service
-  // worker, app manifest tags in its own <head>), and Chrome can
-  // intercept a same-origin navigation - even from a plain anchor
-  // click with target="_blank" - and route it into the installed
-  // app's own window instead of a normal browser tab. Overriding the
-  // click to go through the background script's chrome.tabs.create()
-  // instead sidesteps this entirely: that API opens a tab directly at
-  // the browser level, which link-capturing has no hook into. href
-  // and target stay set on the link itself (for right-click "open in
-  // new tab", copy-link, and screen readers), only the default
-  // left-click gets intercepted.
-  function openLinkAsNormalBrowserTab(link) {
-    link.addEventListener("click", (event) => {
-      event.preventDefault();
-      chrome.runtime.sendMessage({ type: "OPEN_IN_NEW_TAB", url: link.href });
-    });
-  }
-
   // For each class box on the timetable, work out the class's real ID
   // number and add "Class List" and "Markbook" links.
   //
@@ -543,6 +797,14 @@
   // other days exist anywhere else on the site (e.g. the full
   // /timetable page), this can't help them - but the old approach
   // was already broken there too, this isn't a regression.
+  //
+  // Same-tab, plain links (no target, no click override). The PWA
+  // link-capturing gotcha only bites when a click opens a NEW
+  // browsing context (target="_blank" was routed into the installed
+  // app's own window instead of a tab) - a normal same-tab navigation
+  // doesn't create a new window for Chrome to redirect, so it isn't
+  // caught by that capture path. NOT yet independently confirmed on
+  // this specific link - worth a quick click-test after reload.
   function addClassListAndMarkbookLinks() {
     if (!isDashboardPage()) return;
 
@@ -571,16 +833,12 @@
       const classListLink = document.createElement("a");
       classListLink.href = `/learning/class/${classId}`;
       classListLink.textContent = "Class List";
-      classListLink.target = "_blank";
-      openLinkAsNormalBrowserTab(classListLink);
 
       const separator = document.createTextNode(" | ");
 
       const markbookLink = document.createElement("a");
       markbookLink.href = `/learning/markbook/class/${classId}`;
       markbookLink.textContent = "Markbook";
-      markbookLink.target = "_blank";
-      openLinkAsNormalBrowserTab(markbookLink);
 
       wrapper.appendChild(classListLink);
       wrapper.appendChild(separator);
@@ -1627,6 +1885,588 @@
     restoreReliefCheckResult(button);
   }
 
+  // ---------------------------------------------------------------
+  // Dashboard: "My duties"
+  //
+  // Recurring, teacher-defined duties (yard duty, gate duty, etc.),
+  // stored once and shown every matching day of the week - managed
+  // from the "My duties" section of the nav dropdown panel. Two
+  // shapes:
+  //  - "session" duties land on an existing timetable column (same
+  //    period-code/start-time lookup already built for relief-check)
+  //    as a small banner, non-destructively, the same way the relief
+  //    banner does.
+  //  - "gap" duties (before school / recess / lunch / after school)
+  //    have no existing column to attach to, so this inserts one -
+  //    but only for a gap that actually has a duty today, so a normal
+  //    day with no duties doesn't lose width to four dashed, empty
+  //    columns.
+  //
+  // v1 only handles the desktop table
+  // (table.timetable[data-timetable]). The small-screen stacked
+  // table (.timetable-small, a different row-per-period markup)
+  // isn't covered yet - duties won't show on narrow viewports until
+  // that's added separately.
+  // ---------------------------------------------------------------
+
+  const DUTY_DAY_NAMES = {
+    1: "Monday",
+    2: "Tuesday",
+    3: "Wednesday",
+    4: "Thursday",
+    5: "Friday",
+  };
+
+  // afterSlot is the ordinal position (into RELIEF_PERIOD_START_TIMES'
+  // own key order) of the last session column that comes before this
+  // gap; -1 means "before every session column". Ordinal rather than
+  // time-based so it still lands in the right place even on a
+  // timetable that skips a period entirely (e.g. no 3H column shown
+  // at all) - it just finds the boundary between "slot <= afterSlot"
+  // and "slot > afterSlot" among whatever columns actually exist.
+  const DUTY_GAP_PERIODS = [
+    { code: "BSH", label: "Before school", afterSlot: -1 },
+    { code: "RH", label: "Recess", afterSlot: 2 },
+    { code: "LH", label: "Lunch", afterSlot: 4 },
+    { code: "ASH", label: "After school", afterSlot: 6 },
+  ];
+
+  const DUTY_SESSION_CODES = Object.keys(RELIEF_PERIOD_START_TIMES);
+
+  function dutySessionSlot(code) {
+    return DUTY_SESSION_CODES.indexOf(code);
+  }
+
+  function dutyPeriodLabel(code) {
+    const gap = DUTY_GAP_PERIODS.find((g) => g.code === code);
+    if (gap) return gap.label;
+    if (code === "HH") return "Homeroom";
+    return `Session ${code.charAt(0)}`;
+  }
+
+  // Reads each header cell's start time the same way
+  // findColumnIndexesForPeriodCode() does, to work out where each
+  // existing session column sits ordinally. Re-run fresh every time
+  // a gap column is about to be inserted (see addDutyGapColumns)
+  // rather than cached once, since inserting one gap shifts every
+  // index after it.
+  function getExistingSessionColumns(table) {
+    const startTimeToCode = {};
+    Object.entries(RELIEF_PERIOD_START_TIMES).forEach(([code, time]) => {
+      startTimeToCode[time.toLowerCase()] = code;
+    });
+
+    const headerCells = Array.from(table.querySelectorAll("thead th"));
+    return headerCells
+      .map((th, index) => {
+        const timeEl = th.querySelector("time.meta");
+        if (!timeEl) return null;
+        const start = timeEl.textContent.split("–")[0].trim().toLowerCase();
+        const code = startTimeToCode[start];
+        if (!code) return null;
+        return { index, slot: dutySessionSlot(code) };
+      })
+      .filter(Boolean);
+  }
+
+  // Inserts a gap column only for codes with an active duty today
+  // (activeGapCodes) - the previous design always inserted all four,
+  // even empty, to keep the timetable a consistent shape day to day;
+  // dropped after Gus found that consistency ended up squashing every
+  // other column on a normal day with no duties. Also removes any gap
+  // column that's no longer active, so a duty deleted from the "My
+  // duties" panel (or a re-render as the day rolls over) collapses the
+  // column straight back rather than leaving an orphaned "–" behind.
+  // Both header and body cells are added/removed together so they
+  // never drift out of alignment. Safe to call repeatedly.
+  function addDutyGapColumns(table, activeGapCodes) {
+    const headerRow = table.querySelector("thead tr");
+    const bodyRow = table.querySelector("tbody tr");
+    if (!headerRow || !bodyRow) return;
+
+    DUTY_GAP_PERIODS.forEach((gap) => {
+      if (activeGapCodes.has(gap.code)) return;
+      const th = headerRow.querySelector(`th[data-my-gap-code="${gap.code}"]`);
+      const td = bodyRow.querySelector(`td[data-my-gap-code="${gap.code}"]`);
+      if (th) th.remove();
+      if (td) td.remove();
+    });
+
+    DUTY_GAP_PERIODS.forEach((gap) => {
+      if (!activeGapCodes.has(gap.code)) return;
+      if (headerRow.querySelector(`th[data-my-gap-code="${gap.code}"]`))
+        return;
+
+      const sessionColumns = getExistingSessionColumns(table);
+      const nextColumn = sessionColumns.find((c) => c.slot > gap.afterSlot);
+
+      const th = document.createElement("th");
+      th.className = "my-gap-header";
+      th.dataset.myGapCode = gap.code;
+      th.textContent = gap.label;
+
+      const td = document.createElement("td");
+      td.className = "my-gap-cell";
+      td.dataset.myGapCode = gap.code;
+      td.textContent = "–";
+
+      if (nextColumn) {
+        const headerCells = Array.from(headerRow.children);
+        const bodyCells = Array.from(bodyRow.children);
+        headerRow.insertBefore(th, headerCells[nextColumn.index]);
+        bodyRow.insertBefore(td, bodyCells[nextColumn.index]);
+      } else {
+        headerRow.appendChild(th);
+        bodyRow.appendChild(td);
+      }
+    });
+  }
+
+  // Non-destructive, the same approach as markCoveringCell(): adds a
+  // small banner rather than replacing the cell's own content, so the
+  // "Class List | Markbook" links and "Mark Attendance" link
+  // underneath stay intact.
+  function renderSessionDuty(table, duty) {
+    const columnIndexes = findColumnIndexesForPeriodCode(table, duty.code);
+    if (!columnIndexes.length) return;
+
+    const row = table.querySelector("tbody tr");
+    if (!row) return;
+
+    columnIndexes.forEach((index) => {
+      const cell = row.children[index];
+      const subject = cell && cell.querySelector(".timetable-subject");
+      if (!subject) return;
+      if (subject.querySelector(`[data-my-duty-id="${duty.id}"]`)) return;
+
+      const banner = document.createElement("div");
+      banner.className = "my-duty-banner";
+      banner.dataset.myDutyId = duty.id;
+      banner.textContent = duty.label;
+      subject.appendChild(banner);
+    });
+  }
+
+  function renderGapDuty(table, duty) {
+    const cell = table.querySelector(`td[data-my-gap-code="${duty.code}"]`);
+    if (!cell) return;
+    if (cell.dataset.myDutyId === duty.id) return;
+
+    cell.textContent = "";
+    cell.dataset.myDutyId = duty.id;
+    cell.classList.add("my-gap-cell--filled");
+
+    const label = document.createElement("div");
+    label.className = "my-gap-cell-label";
+    label.textContent = duty.label;
+    cell.appendChild(label);
+  }
+
+  // Removes session banners for duties that no longer exist (deleted,
+  // or edited - edits replace the id) rather than leaving stale ones
+  // behind.
+  function clearStaleSessionBanners(table, currentDutyIds) {
+    table.querySelectorAll(".my-duty-banner").forEach((banner) => {
+      if (!currentDutyIds.has(banner.dataset.myDutyId)) banner.remove();
+    });
+  }
+
+  function addMyDutiesToTimetable() {
+    if (!isDashboardPage()) return;
+
+    const table = getDesktopTimetableTable();
+    if (!table) return;
+
+    const today = new Date().getDay();
+
+    chrome.storage.sync.get({ myDuties: [] }, (result) => {
+      const todaysDuties =
+        today >= 1 && today <= 5
+          ? result.myDuties.filter((d) => d.day === today)
+          : [];
+
+      // Only the gap codes with an actual duty today get a column -
+      // see addDutyGapColumns() for why this changed from "always all
+      // four".
+      const activeGapCodes = new Set(
+        todaysDuties
+          .filter((d) => DUTY_GAP_PERIODS.some((g) => g.code === d.code))
+          .map((d) => d.code)
+      );
+      addDutyGapColumns(table, activeGapCodes);
+
+      const currentDutyIds = new Set(todaysDuties.map((d) => d.id));
+
+      todaysDuties.forEach((duty) => {
+        const isGap = DUTY_GAP_PERIODS.some((g) => g.code === duty.code);
+        if (isGap) {
+          renderGapDuty(table, duty);
+        } else {
+          renderSessionDuty(table, duty);
+        }
+      });
+
+      clearStaleSessionBanners(table, currentDutyIds);
+    });
+  }
+
+  // Builds the "My duties" collapsible section of the nav dropdown
+  // panel: the current list (with delete) plus a small add-duty form.
+  // Called from toggleNavPanel() once per panel open, mirroring the
+  // "Other apps" folder's collapsible pattern already used there.
+  function buildDutiesSection(panel) {
+    const dutiesFolderButton = document.createElement("button");
+    dutiesFolderButton.type = "button";
+    dutiesFolderButton.className = "my-nav-folder-row";
+
+    const dutiesIcon = document.createElement("span");
+    dutiesIcon.textContent = "🗓";
+
+    const dutiesLabel = document.createElement("span");
+    dutiesLabel.className = "my-nav-folder-label";
+    dutiesLabel.textContent = "My duties";
+
+    const dutiesChevron = document.createElement("span");
+    dutiesChevron.className = "my-nav-chevron";
+    dutiesChevron.textContent = "▾";
+
+    dutiesFolderButton.appendChild(dutiesIcon);
+    dutiesFolderButton.appendChild(dutiesLabel);
+    dutiesFolderButton.appendChild(dutiesChevron);
+    panel.appendChild(dutiesFolderButton);
+
+    const dutiesBody = document.createElement("div");
+    dutiesBody.className = "my-duties-panel-body";
+    dutiesBody.hidden = true;
+
+    const dutiesList = document.createElement("div");
+    dutiesList.className = "my-duties-list";
+    dutiesBody.appendChild(dutiesList);
+
+    const addForm = document.createElement("div");
+    addForm.className = "my-duty-add-form";
+
+    const addRow = document.createElement("div");
+    addRow.className = "my-duty-add-row";
+
+    const daySelect = document.createElement("select");
+    Object.entries(DUTY_DAY_NAMES).forEach(([value, name]) => {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = name;
+      daySelect.appendChild(opt);
+    });
+
+    const periodSelect = document.createElement("select");
+
+    const sessionGroup = document.createElement("optgroup");
+    sessionGroup.label = "Sessions";
+    DUTY_SESSION_CODES.forEach((code) => {
+      const opt = document.createElement("option");
+      opt.value = code;
+      opt.textContent = dutyPeriodLabel(code);
+      sessionGroup.appendChild(opt);
+    });
+
+    const gapGroup = document.createElement("optgroup");
+    gapGroup.label = "Between sessions";
+    DUTY_GAP_PERIODS.forEach((gap) => {
+      const opt = document.createElement("option");
+      opt.value = gap.code;
+      opt.textContent = gap.label;
+      gapGroup.appendChild(opt);
+    });
+
+    periodSelect.appendChild(sessionGroup);
+    periodSelect.appendChild(gapGroup);
+
+    addRow.appendChild(daySelect);
+    addRow.appendChild(periodSelect);
+    addForm.appendChild(addRow);
+
+    const labelInput = document.createElement("input");
+    labelInput.type = "text";
+    labelInput.className = "my-duty-label-input";
+    labelInput.placeholder = "e.g. Yard duty — MU quad";
+    addForm.appendChild(labelInput);
+
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    addButton.className = "my-duty-add-button";
+    addButton.textContent = "Add duty";
+    addForm.appendChild(addButton);
+
+    dutiesBody.appendChild(addForm);
+    panel.appendChild(dutiesBody);
+
+    function refreshDutiesList() {
+      chrome.storage.sync.get({ myDuties: [] }, (res) => {
+        dutiesList.textContent = "";
+
+        if (!res.myDuties.length) {
+          const empty = document.createElement("div");
+          empty.className = "my-duties-empty";
+          empty.textContent = "No duties added yet.";
+          dutiesList.appendChild(empty);
+          return;
+        }
+
+        res.myDuties
+          .slice()
+          .sort((a, b) => a.day - b.day)
+          .forEach((duty) => {
+            const row = document.createElement("div");
+            row.className = "my-duty-row";
+
+            const text = document.createElement("span");
+            text.className = "my-duty-row-text";
+            text.textContent = `${DUTY_DAY_NAMES[duty.day]} · ${dutyPeriodLabel(
+              duty.code
+            )} · ${duty.label}`;
+            text.title = text.textContent;
+
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "my-duty-row-delete";
+            deleteButton.textContent = "✕";
+            deleteButton.title = "Delete this duty";
+            deleteButton.addEventListener("click", () => {
+              chrome.storage.sync.get({ myDuties: [] }, (r2) => {
+                const updated = r2.myDuties.filter((d) => d.id !== duty.id);
+                chrome.storage.sync.set({ myDuties: updated }, () => {
+                  refreshDutiesList();
+                  addMyDutiesToTimetable();
+                });
+              });
+            });
+
+            row.appendChild(text);
+            row.appendChild(deleteButton);
+            dutiesList.appendChild(row);
+          });
+      });
+    }
+
+    addButton.addEventListener("click", () => {
+      const label = labelInput.value.trim();
+      if (!label) return;
+
+      const duty = {
+        id: `duty-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        day: Number(daySelect.value),
+        code: periodSelect.value,
+        label,
+      };
+
+      chrome.storage.sync.get({ myDuties: [] }, (res) => {
+        const updated = res.myDuties.concat(duty);
+        chrome.storage.sync.set({ myDuties: updated }, () => {
+          labelInput.value = "";
+          refreshDutiesList();
+          addMyDutiesToTimetable();
+        });
+      });
+    });
+
+    dutiesFolderButton.addEventListener("click", () => {
+      const isHidden = dutiesBody.hidden;
+      dutiesBody.hidden = !isHidden;
+      dutiesChevron.classList.toggle("my-nav-chevron--open", isHidden);
+      if (isHidden) refreshDutiesList();
+    });
+  }
+
+  // Shared by both course-import date helpers below. Sets a Schoolbox
+  // date input's value and dispatches a native "change" event so any
+  // jQuery .on("change", ...) handler still fires. Deliberately does
+  // NOT call the picker's own adtp.syncDatesOnElement() - that call's
+  // exact shape on these two steps hasn't been confirmed (only ever
+  // seen invoked from the Learning Activities step's own "Use Unit
+  // Date" link), so this is the plain, confirmed-safe way to set a
+  // value rather than a guessed one. If a set date doesn't visually
+  // sync its own calendar popup, that's the next thing to check
+  // against real evidence, not something to guess a fix for.
+  function setDateInputValue(input, value) {
+    if (!input) return;
+    input.value = value;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  // Schoolbox's date inputs are "dd/mm/yyyy" or "dd/mm/yyyy h:mmam/pm".
+  // Only the date portion is ever touched here - a time suffix, if
+  // present, is carried over unchanged from whatever was already in
+  // the field being written to.
+  function parseDdMmYyyy(value) {
+    const match = /^(\d{2})\/(\d{2})\/(\d{4})/.exec((value || "").trim());
+    if (!match) return null;
+    const [, day, month, year] = match;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  function addDaysToDate(date, days) {
+    const result = new Date(date);
+    result.setDate(result.getDate() + days);
+    return result;
+  }
+
+  function formatDdMmYyyy(date, previousValue) {
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    const datePart = `${day}/${month}/${year}`;
+
+    const timeMatch = /^(\d{2}\/\d{2}\/\d{4})(.*)$/.exec(
+      (previousValue || "").trim()
+    );
+    const timeSuffix = timeMatch ? timeMatch[2] : "";
+    return datePart + timeSuffix;
+  }
+
+  // Course import wizard, Units step (/course/import/units). In every
+  // real example seen, all five units want the exact same Open/Close
+  // pair (the full term span) - this adds a "Copy to all units" button
+  // next to the first unit's own fields rather than making someone
+  // retype the same pair four more times. Only appears while this step
+  // is the active one (Schoolbox disables the whole fieldset, and every
+  // input inside it, once you move past it).
+  function addUnitDateCopyButton() {
+    const fieldset = document.querySelector('fieldset[data-mage="part-2"]');
+    if (!fieldset || fieldset.disabled) return;
+    if (fieldset.querySelector(".my-unit-copy-dates")) return;
+
+    const rows = fieldset.querySelectorAll('[data-type="unit_row"]');
+    if (rows.length < 2) return;
+
+    const firstRow = rows[0];
+    const firstOpen = firstRow.querySelector('input[data-role="open_date"]');
+    const firstClose = firstRow.querySelector('input[data-role="due_date"]');
+    if (!firstOpen || !firstClose) return;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "my-unit-copy-dates";
+    button.textContent = "Copy to all units";
+
+    const anchor = firstClose.closest(".columns") || firstClose.parentElement;
+    if (!anchor) return;
+    anchor.insertAdjacentElement("afterend", button);
+
+    button.addEventListener("click", () => {
+      rows.forEach((row, index) => {
+        if (index === 0) return;
+        const openInput = row.querySelector('input[data-role="open_date"]');
+        const closeInput = row.querySelector('input[data-role="due_date"]');
+        setDateInputValue(openInput, firstOpen.value);
+        setDateInputValue(closeInput, firstClose.value);
+      });
+    });
+  }
+
+  // Course import wizard, Learning Activities step (#import_assessments).
+  // Within a project group Schoolbox itself labels "Learning Activity"
+  // (e.g. "Weekly Outline") - as opposed to a "Reported Grade" group of
+  // real assessment tasks, whose dates are rarely weekly and shouldn't
+  // be auto-shifted - every lesson after the first gets a small "wks
+  // after previous" number next to its Lesson Plan Date. Changing that
+  // number, or editing a row's own date directly, recomputes every row
+  // after it: each date input's own "change" handler just pushes the
+  // next row forward by the next row's own gap, so one edit ripples
+  // down the whole chain without needing separate override state to
+  // track - the field being edited directly *is* the source of truth.
+  function addLessonDateCascade() {
+    const groups = document.querySelectorAll(
+      '#import_assessments ul.information-list.threaded[data-project]'
+    );
+
+    groups.forEach((group) => {
+      if (group.dataset.myCascadeDone === "true") return;
+
+      const parentItem = group.closest("li[data-assessment]");
+      const metaLabel = parentItem
+        ? parentItem.querySelector(":scope > .small-12.columns .pipe.meta")
+        : null;
+      if (!metaLabel || metaLabel.textContent.trim() !== "Learning Activity") {
+        return;
+      }
+
+      const children = Array.from(
+        group.querySelectorAll(":scope > li[data-parent-project]")
+      );
+      if (children.length < 2) return;
+
+      group.dataset.myCascadeDone = "true";
+
+      const dueInputs = children.map((child) =>
+        child.querySelector('input[data-role="due_date"]')
+      );
+      const gapInputs = [null];
+
+      for (let index = 1; index < children.length; index++) {
+        const dueInput = dueInputs[index];
+        if (!dueInput) {
+          gapInputs.push(null);
+          continue;
+        }
+
+        const wrap = document.createElement("span");
+        wrap.className = "my-lesson-gap-wrap";
+
+        const gapLabel = document.createElement("label");
+        gapLabel.className = "my-lesson-gap-label";
+        gapLabel.textContent = "wks after prev";
+
+        const gapInput = document.createElement("input");
+        gapInput.type = "number";
+        gapInput.min = "1";
+        gapInput.max = "8";
+        gapInput.value = "1";
+        gapInput.className = "my-lesson-gap";
+
+        wrap.appendChild(gapLabel);
+        wrap.appendChild(gapInput);
+        // Placed after the whole .input-group (date field + calendar
+        // button), not right after the date input itself - inserting
+        // it inline there squeezed it between the input and the
+        // calendar icon inside a narrow (large-3) column, which wrapped
+        // the label across three lines. Its own row below has room.
+        const inputGroup = dueInput.closest(".input-group") || dueInput;
+        inputGroup.insertAdjacentElement("afterend", wrap);
+
+        gapInputs.push(gapInput);
+      }
+
+      function cascadeFrom(index) {
+        const nextIndex = index + 1;
+        if (nextIndex >= dueInputs.length) return;
+        const currentInput = dueInputs[index];
+        const nextInput = dueInputs[nextIndex];
+        const nextGapInput = gapInputs[nextIndex];
+        if (!currentInput || !nextInput || !nextGapInput) return;
+
+        const currentDate = parseDdMmYyyy(currentInput.value);
+        if (!currentDate) return;
+
+        const gapWeeks = parseInt(nextGapInput.value, 10) || 1;
+        const nextDate = addDaysToDate(currentDate, gapWeeks * 7);
+        setDateInputValue(
+          nextInput,
+          formatDdMmYyyy(nextDate, nextInput.value)
+        );
+      }
+
+      for (let index = 1; index < children.length; index++) {
+        const gapInput = gapInputs[index];
+        if (gapInput) {
+          gapInput.addEventListener("input", () => cascadeFrom(index - 1));
+        }
+        const dueInput = dueInputs[index];
+        if (dueInput) {
+          dueInput.addEventListener("change", () => cascadeFrom(index));
+        }
+      }
+    });
+  }
+
   // The nav button is the only in-page way back to the toggle once
   // tweaks are switched off - if it lived inside applyTweaks() like
   // everything else, turning tweaks off would hide the one thing that
@@ -1641,19 +2481,24 @@
   // enabled (defaults to on). Checking storage first means a
   // disabled extension leaves the rest of the page completely
   // untouched.
-  chrome.storage.sync.get({ tweaksEnabled: true }, (result) => {
-    if (!result.tweaksEnabled) return;
+  chrome.storage.sync.get(
+    { tweaksEnabled: true, tweakToggles: {} },
+    (result) => {
+      if (!result.tweaksEnabled) return;
 
-    // Run once on load.
-    applyTweaks();
+      tweakToggles = mergeTweakTogglesWithDefaults(result.tweakToggles);
 
-    // Schoolbox loads some markbook widgets (the toolbar row, the
-    // table itself) via Vue a moment after the rest of the page, so a
-    // single run-once misses them. Each tweak function already checks
-    // whether it's already applied, so re-running this is harmless -
-    // it just lets the ones that needed to wait catch up once their
-    // target appears.
-    const observer = new MutationObserver(() => applyTweaks());
-    observer.observe(document.body, { childList: true, subtree: true });
-  });
+      // Run once on load.
+      applyTweaks();
+
+      // Schoolbox loads some markbook widgets (the toolbar row, the
+      // table itself) via Vue a moment after the rest of the page, so
+      // a single run-once misses them. Each tweak function already
+      // checks whether it's already applied, so re-running this is
+      // harmless - it just lets the ones that needed to wait catch up
+      // once their target appears.
+      const observer = new MutationObserver(() => applyTweaks());
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+  );
 })();

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Schoolbox UX tweaks — settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <h1>Schoolbox UX tweaks</h1>
+        <p class="subtitle">Turn individual features on or off.</p>
+      </div>
+      <div class="master-toggle">
+        <span>All tweaks</span>
+        <label class="switch">
+          <input type="checkbox" id="master-toggle" />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </header>
+
+    <main id="groups"></main>
+
+    <footer class="save-bar">
+      <span id="save-status" class="save-status"></span>
+      <button type="button" id="save-button" disabled>Save changes</button>
+    </footer>
+  </div>
+
+  <script src="tweak-config.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

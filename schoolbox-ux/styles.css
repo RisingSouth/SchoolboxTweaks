@@ -95,13 +95,56 @@
 /*
   Let the markbook table render at full height instead of being
   capped to fit the viewport with its own internal scrollbar. The
-  page will scroll instead.
+  page will scroll instead. Scoped under a body class content.js
+  toggles on/off (see applyTweaks()) rather than targeting Schoolbox's
+  own class name unconditionally - it previously did, which meant
+  this specific tweak stayed active even with "Enable tweaks" off.
 */
-.diagonal-headings-table-container {
+.my-tweak-full-height-table .diagonal-headings-table-container {
   max-height: none !important;
   overflow-y: visible !important;
 }
 
+/*
+  Course import wizard, Units step: "Copy to all units" button sits
+  next to the first unit's own Close date field.
+*/
+.my-unit-copy-dates {
+  background: none;
+  border: none;
+  color: rgb(30, 105, 128);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0 0 8px;
+}
+
+/*
+  Course import wizard, Learning Activities step: small "wks after
+  previous" number on its own row below a weekly lesson's date field -
+  not inline with the date input and calendar button, which squeezed
+  it into a narrow column and wrapped the label across three lines.
+*/
+.my-lesson-gap-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.my-lesson-gap-label {
+  flex-shrink: 0;
+}
+
+.my-lesson-gap {
+  width: 40px;
+  padding: 2px 4px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
 /*
   Force black text on the shaded bucket columns, overriding
   Schoolbox's own grade-based text colour (green/orange/red), so the
@@ -249,6 +292,24 @@
 
 .my-nav-apps-list[hidden] {
   display: none;
+}
+
+.my-seat-container {
+  margin: 0 0 16px 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.my-seat-container[hidden] {
+  display: none;
+}
+
+.my-seat-iframe {
+  display: block;
+  width: 100%;
+  height: 80vh;
+  border: 0;
 }
 
 .my-nav-panel-footer {
@@ -487,6 +548,156 @@
   background: rgba(234, 10, 6, 0.08);
   padding: 2px 4px;
   margin-bottom: 4px;
+  border-radius: 2px;
+}
+
+/*
+  "My duties" section inside the nav dropdown panel - same
+  collapsible-folder pattern already used for "Other apps".
+*/
+.my-duties-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 14px 12px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.my-duties-panel-body[hidden] {
+  display: none;
+}
+
+.my-duties-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.my-duties-empty {
+  font-size: 12px;
+  color: #999;
+  padding: 4px 2px;
+}
+
+.my-duty-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+}
+
+.my-duty-row-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-duty-row-delete {
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.my-duty-row-delete:hover {
+  color: rgb(30, 105, 128);
+}
+
+.my-duty-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #e5e5e5;
+}
+
+.my-duty-add-row {
+  display: flex;
+  gap: 6px;
+}
+
+.my-duty-add-row select {
+  flex: 1;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.my-duty-label-input {
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.my-duty-add-button {
+  font-size: 12px;
+  padding: 5px 10px;
+  border: 1px solid rgb(30, 105, 128);
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(30, 105, 128);
+  cursor: pointer;
+}
+
+.my-duty-add-button:hover {
+  background: rgb(212, 229, 232);
+}
+
+/*
+  Timetable gap columns (before school / recess / lunch / after
+  school) - always inserted, even when empty, so the row keeps a
+  consistent shape day to day rather than columns appearing and
+  disappearing. Dashed border and muted colour deliberately read as
+  "not a class" against the coloured subject cells either side.
+*/
+.my-gap-header {
+  font-size: 10px;
+  text-align: center;
+  color: #777;
+  font-weight: normal;
+  vertical-align: middle;
+}
+
+.my-gap-cell {
+  border: 1px dashed rgb(30, 105, 128);
+  background: rgba(30, 105, 128, 0.04);
+  text-align: center;
+  color: #999;
+  font-size: 11px;
+  vertical-align: middle;
+}
+
+.my-gap-cell--filled {
+  color: rgb(30, 105, 128);
+}
+
+.my-gap-cell-label {
+  font-weight: 600;
+  padding: 2px;
+}
+
+/*
+  Duty banner on an existing session column - teal (the extension's
+  own accent colour) rather than the relief-cover red, so a duty
+  marker never reads as a "you're covering this" alert.
+*/
+.my-duty-banner {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgb(30, 105, 128);
+  background: rgba(30, 105, 128, 0.08);
+  padding: 2px 4px;
+  margin-top: 4px;
   border-radius: 2px;
 }
 
