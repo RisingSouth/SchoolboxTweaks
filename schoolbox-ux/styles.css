@@ -701,3 +701,84 @@
   border-radius: 2px;
 }
 
+/*
+  Pastoral record insert page: previous-records history panel.
+
+  UNVERIFIED SELECTOR - #content is the same fallback container other
+  tweaks in this file already reach for when they can't find something
+  more specific (see addQuickActionsOnClassHomepage() in content.js),
+  but nobody has confirmed it's actually what wraps the insert-record
+  form on the real /pastoral/student/{id}/record/insert page. Inspect
+  that page and swap this selector for the real one if content doesn't
+  visibly shrink when the panel opens.
+*/
+body.my-pastoral-panel-open #content {
+  margin-right: 340px;
+  transition: margin-right 0.2s ease;
+}
+
+.my-pastoral-history-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  margin: 0 0 12px 0;
+  font-size: 0.9em;
+  border: 1px solid rgb(30, 105, 128);
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(30, 105, 128);
+  cursor: pointer;
+}
+
+.my-pastoral-history-toggle:hover {
+  background: rgb(212, 229, 232);
+}
+
+.my-pastoral-history-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 340px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-left: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.08);
+  z-index: 9000;
+}
+
+.my-pastoral-history-panel[hidden] {
+  display: none;
+}
+
+.my-pastoral-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e5e5;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.my-pastoral-history-close {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: #666;
+}
+
+.my-pastoral-history-close:hover {
+  color: rgb(30, 105, 128);
+}
+
+.my-pastoral-history-body {
+  padding: 12px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+

@@ -35,6 +35,7 @@
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
     if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
+    if (tweakToggles.pastoralRecordHistoryPanel) addPastoralRecordHistoryPanel();
 
     // Pure-CSS tweak (see styles.css) - toggled via a body class
     // rather than a call to skip, since there's no DOM to build.
@@ -2446,12 +2447,27 @@
         const currentDate = parseDdMmYyyy(currentInput.value);
         if (!currentDate) return;
 
-        const gapWeeks = parseInt(nextGapInput.value, 10) || 1;
+        // Clamp to the gap input's own min="1"/max="8" bounds - those
+        // HTML attributes don't stop someone from typing "-1" or "99",
+        // and an unclamped negative value would push the next date
+        // backward instead of forward.
+        const parsedGap = parseInt(nextGapInput.value, 10);
+        const gapWeeks = Number.isFinite(parsedGap)
+          ? Math.min(Math.max(parsedGap, 1), 8)
+          : 1;
         const nextDate = addDaysToDate(currentDate, gapWeeks * 7);
         setDateInputValue(
           nextInput,
           formatDdMmYyyy(nextDate, nextInput.value)
         );
+      }
+
+      // Row 0 has no gap input of its own (it's the anchor - nothing
+      // to compute it from), so it can't go through the same per-row
+      // block below. It still needs a "change" listener so hand-editing
+      // it cascades forward too, same as every other row.
+      if (dueInputs[0]) {
+        dueInputs[0].addEventListener("change", () => cascadeFrom(0));
       }
 
       for (let index = 1; index < children.length; index++) {
@@ -2465,6 +2481,189 @@
         }
       }
     });
+  }
+
+  // ---------------------------------------------------------------
+  // Pastoral record insert page: previous-records history panel
+  //
+  // /pastoral/student/{id}/record/insert has no way to see a
+  // student's past pastoral records while filling in a new one, short
+  // of opening a second tab. /pastoral/student/{id} already renders
+  // that history as plain server-rendered HTML (not Vue, confirmed
+  // from a real page - no CORS/background.js hop needed since both
+  // pages are same-origin), so this fetches it directly and shows it
+  // in a side panel on the insert page.
+  //
+  // The #pastoralRecords container on that page also holds its own
+  // #typeId/#subtypeId filter <select>s in a <fieldset> - those are
+  // stripped out before injecting, since the insert-record form on
+  // THIS page already has elements with those exact ids and having
+  // two would be invalid/broken.
+  //
+  // Layout: a class on <body> shrinks the existing page content
+  // (margin-right) rather than a fixed overlay sitting on top of it,
+  // so the insert form stays fully visible/usable while the panel is
+  // open. See the matching CSS in styles.css for exactly which
+  // selector that targets, and the note there about it being
+  // unverified against the real page.
+  // ---------------------------------------------------------------
+
+  function isPastoralRecordInsertPage() {
+    return /^\/pastoral\/student\/\d+\/record\/insert(?:\/|$)/.test(
+      window.location.pathname
+    );
+  }
+
+  function getPastoralStudentIdFromUrl() {
+    const match = window.location.pathname.match(
+      /^\/pastoral\/student\/(\d+)\/record\/insert(?:\/|$)/
+    );
+    return match ? match[1] : null;
+  }
+
+  // Fetches /pastoral/student/{id}[query] (query is the pagination
+  // link's own href, e.g. "?pageCurrent=2", or null for the first
+  // page), parses out just the heading/list/paginator, and returns
+  // them as a fragment ready to inject into the current document.
+  // Confirmed directly from a real /pastoral/student/{id} response:
+  // the whole history lives inside <div id="pastoralRecords"> as
+  // plain HTML, not behind any Vue hydration.
+  function fetchPastoralRecordsFragment(studentId, query) {
+    const url = "/pastoral/student/" + studentId + (query || "");
+    return fetch(url, { credentials: "same-origin", cache: "no-store" }).then(
+      (res) => {
+        if (!res.ok) {
+          throw new Error("pastoral history fetch failed: HTTP " + res.status);
+        }
+        return res.text();
+      }
+    ).then((html) => {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const source = doc.querySelector("#pastoralRecords");
+      if (!source) {
+        throw new Error("#pastoralRecords not found in fetched page");
+      }
+
+      // This page's own type/subtype filter dropdowns share ids with
+      // the insert-record form already on the target page - drop the
+      // whole fieldset rather than carrying those ids over.
+      const fieldset = source.querySelector("fieldset");
+      if (fieldset) fieldset.remove();
+
+      const heading = source.querySelector("h2.subheader");
+      const list = source.querySelector("ul.information-list");
+      const paginator = source.querySelector("div.paginator");
+
+      const fragment = document.createDocumentFragment();
+      [heading, list, paginator].forEach((node) => {
+        if (node) fragment.appendChild(document.importNode(node, true));
+      });
+      return fragment;
+    });
+  }
+
+  // Loads one page of history into the panel body and wires up its
+  // paginator links to re-run this same fetch instead of navigating -
+  // those links are relative to /pastoral/student/{id} (confirmed from
+  // the real page), which is a different URL to the insert page they'd
+  // otherwise navigate away from.
+  function renderPastoralRecordsPanel(studentId, bodyEl, query) {
+    bodyEl.textContent = "Loading…";
+
+    fetchPastoralRecordsFragment(studentId, query)
+      .then((fragment) => {
+        bodyEl.textContent = "";
+        bodyEl.appendChild(fragment);
+
+        const paginator = bodyEl.querySelector("div.paginator");
+        if (!paginator) return;
+
+        paginator.querySelectorAll("a[href]").forEach((link) => {
+          link.addEventListener("click", (event) => {
+            event.preventDefault();
+            renderPastoralRecordsPanel(
+              studentId,
+              bodyEl,
+              link.getAttribute("href")
+            );
+          });
+        });
+      })
+      .catch((err) => {
+        console.log("[my-pastoral-history] load failed", err);
+        bodyEl.textContent = "Couldn't load record history.";
+      });
+  }
+
+  function addPastoralRecordHistoryPanel() {
+    if (!isPastoralRecordInsertPage()) return;
+    if (document.querySelector(".my-pastoral-history-panel")) return;
+
+    const studentId = getPastoralStudentIdFromUrl();
+    if (!studentId) return;
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "my-pastoral-history-toggle";
+    toggle.textContent = "Record history";
+
+    const panel = document.createElement("div");
+    panel.className = "my-pastoral-history-panel";
+    panel.hidden = true;
+
+    const header = document.createElement("div");
+    header.className = "my-pastoral-history-header";
+
+    const title = document.createElement("span");
+    title.textContent = "Pastoral record history";
+
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "my-pastoral-history-close";
+    closeButton.textContent = "×";
+    closeButton.setAttribute("aria-label", "Close record history panel");
+
+    header.appendChild(title);
+    header.appendChild(closeButton);
+
+    const body = document.createElement("div");
+    body.className = "my-pastoral-history-body";
+
+    panel.appendChild(header);
+    panel.appendChild(body);
+
+    function openPanel() {
+      panel.hidden = false;
+      document.body.classList.add("my-pastoral-panel-open");
+      renderPastoralRecordsPanel(studentId, body, null);
+    }
+
+    function closePanel() {
+      panel.hidden = true;
+      document.body.classList.remove("my-pastoral-panel-open");
+    }
+
+    toggle.addEventListener("click", () => {
+      if (panel.hidden) {
+        openPanel();
+      } else {
+        closePanel();
+      }
+    });
+    closeButton.addEventListener("click", closePanel);
+
+    // Same "heading's row, else #content" fallback already used by
+    // addQuickActionsOnClassHomepage() above.
+    const heading = document.querySelector("h1");
+    const anchorRow = heading ? heading.closest(".row") || heading : null;
+    if (anchorRow && anchorRow.parentNode) {
+      anchorRow.parentNode.insertBefore(toggle, anchorRow.nextSibling);
+    } else {
+      const content = document.querySelector("#content") || document.body;
+      content.insertBefore(toggle, content.firstChild);
+    }
+
+    document.body.appendChild(panel);
   }
 
   // The nav button is the only in-page way back to the toggle once

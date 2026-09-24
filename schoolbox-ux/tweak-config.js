@@ -121,6 +121,16 @@ const TWEAK_GROUPS = [
       },
     ],
   },
+  {
+    name: "Pastoral records",
+    tweaks: [
+      {
+        id: "pastoralRecordHistoryPanel",
+        label: "Record history panel",
+        description: "Shows a student's past pastoral records beside the new-record form",
+      },
+    ],
+  },
 ];
 
 // Flat {id: true} defaults, derived from the groups above so there's
