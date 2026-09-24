@@ -2508,6 +2508,15 @@
   // unverified against the real page.
   // ---------------------------------------------------------------
 
+  // "Always open this panel automatically" - same opt-in,
+  // chrome.storage.sync pattern as addPastoralFlagFilter()'s
+  // "Remember my choices" (per-user across devices/classes, not
+  // .local). Populated from storage alongside tweakToggles at the
+  // bottom of this file, before addPastoralRecordHistoryPanel() first
+  // runs, and kept in sync here so a mid-session toggle doesn't need
+  // a re-read to take effect.
+  let pastoralPanelAlwaysOpen = false;
+
   function isPastoralRecordInsertPage() {
     return /^\/pastoral\/student\/\d+\/record\/insert(?:\/|$)/.test(
       window.location.pathname
@@ -2626,10 +2635,42 @@
     header.appendChild(title);
     header.appendChild(closeButton);
 
+    // Own row directly under the title, above the record list - same
+    // custom switch as "Remember my choices" on the Class List flag
+    // filter (see addPastoralFlagFilter()), since Schoolbox's own CSS
+    // leaves a plain checkbox invisible.
+    const alwaysOpenRow = document.createElement("div");
+    alwaysOpenRow.className = "my-pastoral-history-always-open-row";
+
+    const alwaysOpenSwitch = document.createElement("label");
+    alwaysOpenSwitch.className = "my-nav-switch";
+
+    const alwaysOpenCheckbox = document.createElement("input");
+    alwaysOpenCheckbox.type = "checkbox";
+    alwaysOpenCheckbox.checked = pastoralPanelAlwaysOpen;
+
+    const alwaysOpenSlider = document.createElement("span");
+    alwaysOpenSlider.className = "my-nav-slider";
+
+    alwaysOpenCheckbox.addEventListener("change", () => {
+      pastoralPanelAlwaysOpen = alwaysOpenCheckbox.checked;
+      chrome.storage.sync.set({
+        pastoralPanelAlwaysOpen: alwaysOpenCheckbox.checked,
+      });
+    });
+
+    alwaysOpenSwitch.appendChild(alwaysOpenCheckbox);
+    alwaysOpenSwitch.appendChild(alwaysOpenSlider);
+    alwaysOpenRow.appendChild(alwaysOpenSwitch);
+    alwaysOpenRow.appendChild(
+      document.createTextNode("Always open this panel automatically")
+    );
+
     const body = document.createElement("div");
     body.className = "my-pastoral-history-body";
 
     panel.appendChild(header);
+    panel.appendChild(alwaysOpenRow);
     panel.appendChild(body);
 
     function openPanel() {
@@ -2664,6 +2705,8 @@
     }
 
     document.body.appendChild(panel);
+
+    if (pastoralPanelAlwaysOpen) openPanel();
   }
 
   // The nav button is the only in-page way back to the toggle once
@@ -2681,11 +2724,12 @@
   // disabled extension leaves the rest of the page completely
   // untouched.
   chrome.storage.sync.get(
-    { tweaksEnabled: true, tweakToggles: {} },
+    { tweaksEnabled: true, tweakToggles: {}, pastoralPanelAlwaysOpen: false },
     (result) => {
       if (!result.tweaksEnabled) return;
 
       tweakToggles = mergeTweakTogglesWithDefaults(result.tweakToggles);
+      pastoralPanelAlwaysOpen = result.pastoralPanelAlwaysOpen;
 
       // Run once on load.
       applyTweaks();

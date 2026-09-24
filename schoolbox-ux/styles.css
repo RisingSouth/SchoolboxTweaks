@@ -776,9 +776,79 @@ body.my-pastoral-panel-open #content {
   color: rgb(30, 105, 128);
 }
 
+.my-pastoral-history-always-open-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e5e5e5;
+  font-size: 0.8em;
+  color: rgb(102, 102, 102);
+  flex-shrink: 0;
+}
+
 .my-pastoral-history-body {
   padding: 12px 16px;
   overflow-y: auto;
   flex: 1;
+}
+
+/*
+  Density overrides for the record list fetched from
+  /pastoral/student/{id} (see fetchPastoralRecordsFragment() in
+  content.js). That markup - ul.information-list > li.list-item, each
+  with a portrait <img>, an <h3> title link, and a <p class="meta"> -
+  is styled by Schoolbox's own CSS for a full-width page column, not a
+  ~340px panel, so left alone it wraps badly and feels over-padded
+  here. Everything below is scoped under .my-pastoral-history-panel so
+  none of it touches the same markup on the student's own
+  /pastoral/student page.
+
+  NOT visually verified against a real fetched page (no authenticated
+  access to a live Schoolbox instance from here) - these values are a
+  reasonable starting point from the confirmed markup shape, not
+  measured against the rendered panel. Check against real data
+  (including a long title like "PMI 11 - Unprepared for Humanities (No
+  notebook) - M.Scaddan - 18/9/26") and adjust spacing/sizes if
+  anything looks off.
+*/
+.my-pastoral-history-panel .information-list .list-item {
+  padding: 8px 0;
+  margin: 0;
+}
+
+/* Sized for a full list row by Schoolbox's own CSS - shrunk to the
+   approved panel mockup's 32px. !important since host CSS or an
+   inline width/height attribute on the <img> itself may otherwise
+   win. */
+.my-pastoral-history-panel .information-list .list-item img {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+/* Clamps to 2 lines with an ellipsis instead of wrapping freely - the
+   <a> inside still gets clicked normally, this only clips what's
+   visible. */
+.my-pastoral-history-panel .information-list .list-item h3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.9em;
+  line-height: 1.3;
+  margin: 0 0 2px;
+}
+
+/* Condensed onto one line - type (subtype), creator, timestamp -
+   trimming whatever doesn't fit (e.g. "last updated by" on an edited
+   record) rather than wrapping across several lines. The full record
+   is one click away via the h3 link above. */
+.my-pastoral-history-panel .information-list .list-item p.meta {
+  font-size: 0.75em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
 }
 
