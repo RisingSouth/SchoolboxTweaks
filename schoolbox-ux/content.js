@@ -1613,7 +1613,7 @@
   // TEMPORARY TEST OVERRIDE: set to a "Lastname, Firstname" string to force
   // relief-check parsing to match that name instead of the signed-in user.
   // Set back to null when done testing.
-  const DEBUG_RELIEF_NAME = "Filardo, Brooke";
+  const DEBUG_RELIEF_NAME = null;
 
   // window.schoolboxUser is set by Schoolbox's own inline <script> in
   // the page's JS world, which this (isolated-world) content script
@@ -1706,20 +1706,41 @@
     // matching matchName right after the period code is enough to
     // avoid picking it up. Event rows like "HH - HoD Duty/Meeting 3"
     // have "-" in the teacher slot and so never match matchName here.
-    const escapedMatchNameLoose = matchName
-      .trim()
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      .replace(/\s+/g, "\\s+");
+    // The bulletin writes covering teachers either as "Last, First" or
+    // as "First Last" (no comma), so accept both.
+    const nameVariants = [matchName];
+    const commaAt = matchName.indexOf(",");
+    if (commaAt !== -1) {
+      const last = matchName.slice(0, commaAt).trim();
+      const first = matchName.slice(commaAt + 1).trim();
+      if (last && first) nameVariants.push(`${first} ${last}`);
+    }
     const tableRowRegex = /^(HH|[1-6]H)\s+(.+)$/i;
-    const nameStartRegex = new RegExp(
-      "^" + escapedMatchNameLoose + "\\s+(.+)$",
-      "i"
-    );
+    const nameStartRegexes = nameVariants.map((variant) => {
+      const escapedVariantLoose = variant
+        .trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        .replace(/\s+/g, "\\s+");
+      return {
+        variant,
+        regex: new RegExp("^" + escapedVariantLoose + "\\s+(.+)$", "i"),
+      };
+    });
     text.split("\n").forEach((line) => {
       const trimmed = line.trim();
       const rowMatch = trimmed.match(tableRowRegex);
       if (!rowMatch) return;
-      const nameMatch = rowMatch[2].trim().match(nameStartRegex);
+      const rest = rowMatch[2].trim();
+      let matchedVariant = null;
+      let nameMatch = null;
+      for (const { variant, regex } of nameStartRegexes) {
+        const m = rest.match(regex);
+        if (m) {
+          matchedVariant = variant;
+          nameMatch = m;
+          break;
+        }
+      }
       if (!nameMatch) return;
 
       const periodCode = rowMatch[1].toUpperCase();
@@ -1736,7 +1757,9 @@
 
       console.log(
         "Schoolbox UX tweaks: relief parse - table row matched:",
-        trimmed
+        trimmed,
+        "matchedVariant",
+        matchedVariant
       );
       results.push({ periodCode, room, className: "", classCode });
     });
