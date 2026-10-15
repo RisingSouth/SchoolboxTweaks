@@ -1698,6 +1698,49 @@
         classCode: rowMatch[4].trim(),
       });
     }
+
+    // Covers table rows (used when the bulletin has no "assigned the
+    // following cover today" blocks for anyone): one line per period,
+    // e.g. "HH Filardo, Brooke 11MAKURU.01 K.2". The absent teacher's
+    // name wraps onto neighbouring lines and is never in this slot, so
+    // matching matchName right after the period code is enough to
+    // avoid picking it up. Event rows like "HH - HoD Duty/Meeting 3"
+    // have "-" in the teacher slot and so never match matchName here.
+    const escapedMatchNameLoose = matchName
+      .trim()
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\s+/g, "\\s+");
+    const tableRowRegex = /^(HH|[1-6]H)\s+(.+)$/i;
+    const nameStartRegex = new RegExp(
+      "^" + escapedMatchNameLoose + "\\s+(.+)$",
+      "i"
+    );
+    text.split("\n").forEach((line) => {
+      const trimmed = line.trim();
+      const rowMatch = trimmed.match(tableRowRegex);
+      if (!rowMatch) return;
+      const nameMatch = rowMatch[2].trim().match(nameStartRegex);
+      if (!nameMatch) return;
+
+      const periodCode = rowMatch[1].toUpperCase();
+      const tail = nameMatch[1].trim().split(/\s+/);
+      if (tail.length < 2) return;
+      const room = tail[tail.length - 1];
+      const classCode = tail.slice(0, -1).join(" ");
+
+      const isDuplicate = results.some(
+        (result) =>
+          result.periodCode === periodCode && result.classCode === classCode
+      );
+      if (isDuplicate) return;
+
+      console.log(
+        "Schoolbox UX tweaks: relief parse - table row matched:",
+        trimmed
+      );
+      results.push({ periodCode, room, className: "", classCode });
+    });
+
     return results;
   }
 
@@ -1746,7 +1789,9 @@
 
     const banner = document.createElement("div");
     banner.className = "my-relief-cover-banner";
-    banner.textContent = `Covering: ${assignment.className} (${assignment.classCode}), ${assignment.room}`;
+    banner.textContent = assignment.className
+      ? `Covering: ${assignment.className} (${assignment.classCode}), ${assignment.room}`
+      : `Covering: ${assignment.classCode}, ${assignment.room}`;
     subject.insertBefore(banner, subject.firstChild);
   }
 
