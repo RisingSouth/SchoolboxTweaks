@@ -1646,10 +1646,32 @@
     const rowRegex =
       /(HH|[1-6]H)\s+(\S+)\s+(.+?)\s+([A-Z0-9]+\.[0-9]+)\s+(.+)/;
 
+    const nameIndex = text.indexOf(matchName);
+    console.log(
+      "Schoolbox UX tweaks: relief parse - matchName",
+      JSON.stringify(matchName),
+      "text.length",
+      text.length,
+      "text.indexOf(matchName)",
+      nameIndex
+    );
+    if (nameIndex !== -1) {
+      console.log(
+        "Schoolbox UX tweaks: relief parse - text around match",
+        text.slice(Math.max(0, nameIndex - 100), nameIndex + 600)
+      );
+    }
+
     const results = [];
     let match;
     while ((match = blockRegex.exec(text))) {
       const rowMatch = match[1].match(rowRegex);
+      console.log(
+        "Schoolbox UX tweaks: relief parse - block",
+        match[1],
+        "rowRegex matched?",
+        !!rowMatch
+      );
       if (!rowMatch) continue;
       results.push({
         periodCode: rowMatch[1].trim(),
@@ -1842,6 +1864,10 @@
       }
 
       const text = await extractPdfText(pdfUrl);
+      console.log(
+        "Schoolbox UX tweaks: relief parse - extracted text length",
+        text.length
+      );
       const assignments = parseCoveringAssignments(text, matchName);
 
       const table = getDesktopTimetableTable();
@@ -1856,6 +1882,13 @@
       button.textContent = formatReliefButtonLabel(appliedCount, checkedAtMs);
       button.classList.add("my-relief-checked");
       button.disabled = false;
+
+      console.log(
+        "Schoolbox UX tweaks: relief parse - assignments",
+        assignments,
+        "appliedCount",
+        appliedCount
+      );
 
       // Saved regardless of whether any cover was found - a confirmed
       // "no cover today" is still a completed check, and should
