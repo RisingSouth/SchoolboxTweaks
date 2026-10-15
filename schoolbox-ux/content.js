@@ -1610,12 +1610,18 @@
     return lines.join("\n");
   }
 
+  // TEMPORARY TEST OVERRIDE: set to a "Lastname, Firstname" string to force
+  // relief-check parsing to match that name instead of the signed-in user.
+  // Set back to null when done testing.
+  const DEBUG_RELIEF_NAME = "Filardo, Brooke";
+
   // window.schoolboxUser is set by Schoolbox's own inline <script> in
   // the page's JS world, which this (isolated-world) content script
   // can't see directly. main-world-bridge.js copies the two fields
   // needed onto a DOM attribute instead, since the DOM - unlike JS
   // globals - genuinely is shared between the two worlds.
   function getSchoolboxUserMatchName() {
+    if (DEBUG_RELIEF_NAME) return DEBUG_RELIEF_NAME;
     const raw = document.documentElement.getAttribute("data-schoolbox-user");
     if (!raw) return null;
     try {
@@ -1661,6 +1667,18 @@
         text.slice(Math.max(0, nameIndex - 100), nameIndex + 600)
       );
     }
+
+    const coverBlockNameRegex =
+      /([^\n,]+,\s*[^\n(]+?)\s*\([A-Z0-9]+\)\s*,\s*you have been assigned the following cover today/g;
+    const namesWithCoverBlocks = [];
+    let nameMatch;
+    while ((nameMatch = coverBlockNameRegex.exec(text))) {
+      namesWithCoverBlocks.push(nameMatch[1].trim());
+    }
+    console.log(
+      "Schoolbox UX tweaks: relief parse - names with cover blocks:",
+      namesWithCoverBlocks
+    );
 
     const results = [];
     let match;
