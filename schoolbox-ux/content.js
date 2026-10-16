@@ -3288,6 +3288,10 @@
   // The dropdown can end up attached directly to <body> once Foundation
   // (the site's dropdown JS) has initialised it, so this looks it up
   // by id globally rather than assuming it's still nested under `li`.
+  //
+  // The site's own ⋮ menu (already present on every row) covers any
+  // remaining dropdown actions, so this only surfaces the four most
+  // useful shortcuts rather than duplicating that menu.
   function buildCourseListTools(li, courseId) {
     const dropdown = document.getElementById(`courseDropdown-${courseId}`);
     if (!dropdown) return null;
@@ -3307,46 +3311,10 @@
       tools.appendChild(a);
     };
 
-    const homepage = findLink("course-list-homepage-");
-
     addToolLink(findLink("course-list-planner-"), "Unit Planner");
     addToolLink(findLink("course-list-markbook-"), "Course Markbook");
     addToolLink(findLink("course-list-calendar-"), "Assessment Calendar");
-    addToolLink(homepage, "Homepage");
-
-    // Foundation's own dropdown trigger convention: an element with
-    // data-dropdown="<target id>" toggles the matching #<target id>
-    // panel. Clicking it (rather than trying to open the dropdown
-    // ourselves) means its positioning/outside-click-to-close logic
-    // all keep working unmodified.
-    const trigger =
-      li.querySelector(`[data-dropdown="courseDropdown-${courseId}"]`) ||
-      document.querySelector(
-        `[data-dropdown="courseDropdown-${courseId}"][aria-controls], [aria-controls="courseDropdown-${courseId}"]`
-      );
-
-    if (trigger) {
-      const moreBtn = document.createElement("button");
-      moreBtn.type = "button";
-      moreBtn.className = "my-cl-tool-btn my-cl-tool-btn--more";
-      moreBtn.textContent = "⋯";
-      moreBtn.setAttribute("aria-label", "More actions");
-      moreBtn.addEventListener("click", (event) => {
-        event.preventDefault();
-        trigger.click();
-      });
-      tools.appendChild(moreBtn);
-    } else if (homepage) {
-      // Couldn't find a clickable trigger for the existing dropdown -
-      // falls back to a plain link to the course homepage instead, as
-      // agreed for this case.
-      const a = document.createElement("a");
-      a.href = homepage.getAttribute("href");
-      a.textContent = "⋯";
-      a.className = "my-cl-tool-btn my-cl-tool-btn--more";
-      a.setAttribute("aria-label", "Course Homepage");
-      tools.appendChild(a);
-    }
+    addToolLink(findLink("course-list-homepage-"), "Homepage");
 
     return tools.childElementCount ? tools : null;
   }
@@ -3451,6 +3419,7 @@
     });
 
     collapser.insertAdjacentElement("afterend", pill);
+    li.classList.add("my-cl-has-pill");
 
     if (panel && !panel.querySelector(".my-cl-units-label")) {
       const unitList = panel.querySelector("ul.unit-list");
@@ -3708,6 +3677,7 @@
     }
     if (allHeading) {
       setTextIfChanged(allHeading, `ALL COURSES · ${allCount} matching your filters`);
+      allHeading.classList.toggle("my-cl-show-pin-hint", pinnedCount === 0);
     }
   }
 
