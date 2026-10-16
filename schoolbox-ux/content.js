@@ -3024,10 +3024,9 @@
   let courseListState = null;
   let courseListStateLoading = false;
   let courseListChipsBuilt = false;
-  let courseListObserver = null;
-  let courseListObserverTimer = null;
   let courseListSearchFocusAttempted = false;
   let courseListCountTextEl = null;
+  let courseListRunning = false;
 
   function loadCourseListState(onReady) {
     if (courseListState) {
@@ -3098,39 +3097,56 @@
   }
 
   function initCourseListPage() {
+    console.count("Schoolbox UX tweaks: initCourseListPage");
+
     if (!isCourseListPage()) return;
+    if (courseListRunning) return;
+    courseListRunning = true;
 
-    focusCourseSearchOnLoad();
+    try {
+      focusCourseSearchOnLoad();
 
-    const resultsRoot = document.querySelector("#course-selector-results");
-    if (!resultsRoot) return;
+      const resultsRoot = document.querySelector("#course-selector-results");
+      if (!resultsRoot) return;
 
-    const rows = resultsRoot.querySelectorAll("li[data-course-row]");
-    if (!rows.length) return;
+      const rows = resultsRoot.querySelectorAll("li[data-course-row]");
+      if (!rows.length) return;
 
-    ensureCourseListObserver(resultsRoot);
+      loadCourseListState(() => {
+        // The body-wide observer re-runs this on every DOM mutation
+        // anywhere on the page, so once everything is already in place
+        // (including a row that lost its star and self-healed on a
+        // previous pass), this needs to be a cheap no-op rather than
+        // re-walking and re-filtering ~515 rows for nothing.
+        const rowsReady = Array.from(rows).every(
+          (li) =>
+            li.classList.contains("my-cl-ready") &&
+            !!li.querySelector(".my-cl-pin-star")
+        );
+        const chipBarReady =
+          courseListChipsBuilt || !!document.querySelector(".my-cl-filterbar");
+        const headingsReady = !!resultsRoot.querySelector(".my-cl-heading--pinned");
 
-    loadCourseListState(() => {
-      rows.forEach(setupCourseListRow);
-      ensureCourseListChipBar(resultsRoot.querySelectorAll("li[data-course-row]"));
-      ensureCourseListHeadingRows(resultsRoot);
-      applyCourseListFilters();
-    });
-  }
+        if (rowsReady && chipBarReady && headingsReady) return;
 
-  // Schoolbox re-renders this results list (e.g. as its own search
-  // runs), which can wipe out anything injected into a row. Debounced
-  // so a burst of mutations (the initial ~515-row render, or the site
-  // re-rendering many rows at once) collapses into a single re-run
-  // rather than one per row.
-  function ensureCourseListObserver(resultsRoot) {
-    if (courseListObserver) return;
+        let changed = false;
+        rows.forEach((li) => {
+          if (setupCourseListRow(li)) changed = true;
+        });
+        if (
+          ensureCourseListChipBar(resultsRoot.querySelectorAll("li[data-course-row]"))
+        ) {
+          changed = true;
+        }
+        if (ensureCourseListHeadingRows(resultsRoot)) changed = true;
 
-    courseListObserver = new MutationObserver(() => {
-      clearTimeout(courseListObserverTimer);
-      courseListObserverTimer = setTimeout(initCourseListPage, 150);
-    });
-    courseListObserver.observe(resultsRoot, { childList: true, subtree: true });
+        ensureCourseListToolsDelegation(resultsRoot);
+
+        if (changed) applyCourseListFilters();
+      });
+    } finally {
+      courseListRunning = false;
+    }
   }
 
   // Only ever attempted once, the moment #course-search first shows
@@ -3180,16 +3196,22 @@
   }
 
   function setupCourseListRow(li) {
-    if (li.classList.contains("my-cl-ready")) return;
+    // Treat a row as not-ready (and rebuild it) if the site re-rendered
+    // it and wiped the star back out, even though the li itself kept
+    // its my-cl-ready class - this is what lets a row self-heal without
+    // needing the old dedicated per-row observer.
+    if (li.classList.contains("my-cl-ready") && li.querySelector(".my-cl-pin-star")) {
+      return false;
+    }
 
     const card = li.querySelector("div.card");
-    if (!card) return;
+    if (!card) return false;
 
     const link = card.querySelector("a[data-course-link]");
-    if (!link) return;
+    if (!link) return false;
 
     const courseId = link.getAttribute("data-course-id");
-    if (!courseId) return;
+    if (!courseId) return false;
     const courseName = link.getAttribute("data-course-name") || link.textContent.trim();
 
     li.dataset.myCourseId = courseId;
@@ -3202,18 +3224,14 @@
     // Sibling BEFORE the link, inside the card - never inside the
     // anchor itself, so clicking the star can never trigger a
     // navigation.
-    card.insertBefore(buildCoursePinStar(courseId, courseName), card.firstChild);
-
-    const tools = buildCourseListTools(li, courseId);
-    if (tools) {
-      const metaEl = card.querySelector("p.meta");
-      if (metaEl) metaEl.insertAdjacentElement("afterend", tools);
-      else card.appendChild(tools);
+    if (!card.querySelector(".my-cl-pin-star")) {
+      card.insertBefore(buildCoursePinStar(courseId, courseName), card.firstChild);
     }
 
     addCourseListUnitsPill(li, courseId);
 
     li.classList.add("my-cl-ready");
+    return true;
   }
 
   function buildCoursePinStar(courseId, courseName) {
@@ -3333,6 +3351,66 @@
     return tools.childElementCount ? tools : null;
   }
 
+  // Building all ~515 rows' quick-action tools up front is the single
+  // most expensive part of the page - most of those rows are never
+  // looked at in a given visit. So instead, each row's tools are built
+  // the first time the mouse or keyboard focus actually reaches it, via
+  // one pair of listeners delegated on the list rather than one pair
+  // per row. Devices with no hover (touch) would otherwise never build
+  // any tools at all, so those fall back to building every row's tools
+  // up front, just spread across animation frames so it doesn't block
+  // the thread in one go.
+  function ensureCourseListToolsDelegation(resultsRoot) {
+    const list = resultsRoot.querySelector("ul.information-list");
+    if (!list || list.dataset.myClToolsWired) return;
+    list.dataset.myClToolsWired = "1";
+
+    if (window.matchMedia && window.matchMedia("(hover: none)").matches) {
+      buildCourseListToolsInChunks(list);
+      return;
+    }
+
+    const handler = (event) => {
+      const li = event.target.closest("li[data-course-row]");
+      if (li) ensureCourseListToolsForRow(li);
+    };
+    list.addEventListener("mouseover", handler);
+    list.addEventListener("focusin", handler);
+  }
+
+  function ensureCourseListToolsForRow(li) {
+    if (li.querySelector(".my-cl-tools")) return;
+
+    const courseId = li.dataset.myCourseId;
+    if (!courseId) return;
+
+    const tools = buildCourseListTools(li, courseId);
+    if (!tools) return;
+
+    const metaEl = li.querySelector("div.card p.meta");
+    if (metaEl) {
+      metaEl.insertAdjacentElement("afterend", tools);
+    } else {
+      const card = li.querySelector("div.card");
+      if (card) card.appendChild(tools);
+    }
+  }
+
+  function buildCourseListToolsInChunks(list) {
+    const rows = Array.from(list.querySelectorAll("li[data-course-row]"));
+    let index = 0;
+
+    function step() {
+      const end = Math.min(index + 50, rows.length);
+      for (; index < end; index++) {
+        ensureCourseListToolsForRow(rows[index]);
+      }
+      if (index < rows.length) requestAnimationFrame(step);
+    }
+
+    requestAnimationFrame(step);
+  }
+
   // Adds the "N units ▾" pill next to a row's existing expand arrow,
   // and (once per course) a small "Units:" label in front of its unit
   // list - the unit pills themselves are styled in styles.css.
@@ -3389,17 +3467,17 @@
   // campus list from - chip selection state then lives entirely in
   // courseListState for the rest of the page's life.
   function ensureCourseListChipBar(rows) {
-    if (courseListChipsBuilt) return;
+    if (courseListChipsBuilt) return false;
     if (document.querySelector(".my-cl-filterbar")) {
       courseListChipsBuilt = true;
-      return;
+      return false;
     }
 
     const searchInput = document.querySelector("#course-search");
-    if (!searchInput) return;
+    if (!searchInput) return false;
 
     const anchor = searchInput.closest(".row") || searchInput.parentElement;
-    if (!anchor || !anchor.parentNode) return;
+    if (!anchor || !anchor.parentNode) return false;
 
     const campuses = new Set();
     rows.forEach((li) => {
@@ -3485,6 +3563,7 @@
 
     anchor.insertAdjacentElement("afterend", bar);
     courseListChipsBuilt = true;
+    return true;
   }
 
   function buildCourseListChipGroup(title, values, selectedSet, onChange) {
@@ -3539,8 +3618,8 @@
   // `order` values in styles.css, not by where these live in the DOM.
   function ensureCourseListHeadingRows(resultsRoot) {
     const list = resultsRoot.querySelector("ul.information-list");
-    if (!list) return;
-    if (list.querySelector(".my-cl-heading--pinned")) return;
+    if (!list) return false;
+    if (list.querySelector(".my-cl-heading--pinned")) return false;
 
     const pinnedHeading = document.createElement("li");
     pinnedHeading.className = "my-cl-heading my-cl-heading--pinned";
@@ -3550,6 +3629,7 @@
 
     list.appendChild(pinnedHeading);
     list.appendChild(allHeading);
+    return true;
   }
 
   // The single source of truth for which rows are hidden by our own
@@ -3603,24 +3683,37 @@
     updateCourseListCount(rows.length, visibleCount);
   }
 
+  // Replacing a text node (even with identical text) is still a
+  // childList mutation, which would otherwise feed straight back into
+  // the body-wide MutationObserver that re-runs applyTweaks() - so
+  // every write here is guarded to only touch the DOM when the value
+  // actually changed.
+  function setTextIfChanged(el, text) {
+    if (el.textContent !== text) el.textContent = text;
+  }
+
   function updateCourseListHeadings(resultsRoot, pinnedCount, allCount) {
     const pinnedHeading = resultsRoot.querySelector(".my-cl-heading--pinned");
     const allHeading = resultsRoot.querySelector(".my-cl-heading--all");
 
     if (pinnedHeading) {
-      pinnedHeading.textContent = `PINNED · ${pinnedCount} course${
-        pinnedCount === 1 ? "" : "s"
-      }`;
-      pinnedHeading.style.display = pinnedCount === 0 ? "none" : "";
+      setTextIfChanged(
+        pinnedHeading,
+        `PINNED · ${pinnedCount} course${pinnedCount === 1 ? "" : "s"}`
+      );
+      const display = pinnedCount === 0 ? "none" : "";
+      if (pinnedHeading.style.display !== display) {
+        pinnedHeading.style.display = display;
+      }
     }
     if (allHeading) {
-      allHeading.textContent = `ALL COURSES · ${allCount} matching your filters`;
+      setTextIfChanged(allHeading, `ALL COURSES · ${allCount} matching your filters`);
     }
   }
 
   function updateCourseListCount(total, visible) {
     if (!courseListCountTextEl) return;
-    courseListCountTextEl.textContent = `Showing ${visible} of ${total} courses`;
+    setTextIfChanged(courseListCountTextEl, `Showing ${visible} of ${total} courses`);
   }
 
   // The nav button is the only in-page way back to the toggle once
