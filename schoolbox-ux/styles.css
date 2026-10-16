@@ -156,11 +156,10 @@
 }
 
 /*
-  Shared base for the Markbook's "quick link" icons (header: mark
-  all students; cell: open this student's response). Positioned
-  absolute within the header/cell, which has position: relative set
-  inline in JS only on the elements that get one, so the icon sits
-  in a corner without affecting the table's own layout or widths.
+  Markbook cell "open this student's response" icon. Positioned
+  absolute within the cell, which has position: relative set inline
+  in JS only on the cells that get one, so the icon sits in a corner
+  without affecting the table's own layout or widths.
 */
 .my-mb-quicklink {
   position: absolute;
@@ -184,25 +183,66 @@
   color: white;
 }
 
-/* Tucked in the header's top-right corner, clear of the title link
-   (left-aligned) and the diagonal header text. */
-.my-mb-quicklink--header {
-  top: 2px;
-  right: 2px;
-}
-
-/* Hidden until the cell is hovered, so it doesn't clutter the table
-   at a glance - tucked in the bottom-right corner, clear of the
-   mark/grade text. */
+/* Faintly visible at all times so the feature is discoverable, full
+   opacity on hover/focus - tucked in the bottom-right corner, clear
+   of the mark/grade text. */
 .my-mb-quicklink--cell {
   bottom: 1px;
   right: 1px;
-  opacity: 0;
+  opacity: 0.35;
   transition: opacity 0.1s ease-in-out;
 }
 
-td[data-pop-out-menu="true"]:hover .my-mb-quicklink--cell {
+td[data-pop-out-menu="true"]:hover .my-mb-quicklink--cell,
+.my-mb-quicklink--cell:focus-visible {
   opacity: 1;
+}
+
+/*
+  The "Go to marking" actions row, inserted directly under the
+  unit-titles row - a normal horizontal row (no rotation/absolute
+  positioning like the diagonal header rows above it), so the pills
+  inside it stay legible.
+*/
+.my-mb-actions-row th {
+  background: #e6f1f4;
+  border-top: 1px solid #b9d6df;
+  border-bottom: 1px solid #b9d6df;
+  padding: 8px;
+  font-weight: normal;
+}
+
+.my-mb-actions-lead {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #1e6980;
+}
+
+.my-mb-markall {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: #1e6980;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.my-mb-markall:hover {
+  background: #15506a;
+}
+
+.my-mb-markall svg {
+  flex-shrink: 0;
 }
 
 /*

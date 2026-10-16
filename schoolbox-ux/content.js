@@ -440,19 +440,20 @@
     });
   }
 
-  // Adds two small navigation shortcuts to the Markbook table:
-  //  - one per assessment header, to that assessment's own "mark all
-  //    students" status page - only for assessments that actually
-  //    have gradable task cells, since Learning Activities and
-  //    Reported Grade columns have nothing to mark;
-  //  - one per gradable cell, visible on hover, straight to that
-  //    student's response for that assessment.
-  // Vue re-renders cells/headers (e.g. when filters change), wiping
-  // out anything injected into them, so rather than tracking
-  // readiness on the table as a whole (which would skip re-adding
-  // links to cells Vue has quietly replaced), each link is marked
-  // with .my-mb-quicklink and every header/cell is checked for one
-  // on every pass.
+  // Adds two small navigation shortcuts to the Markbook:
+  //  - a "Go to marking" row under the unit-titles row, with one
+  //    pill per assessment column that actually has gradable task
+  //    cells (Learning Activities and Reported Grade columns have
+  //    nothing to mark, so get an empty cell instead);
+  //  - one icon per gradable cell, straight to that student's
+  //    response for that assessment.
+  // Vue re-renders cells (e.g. when filters change), wiping out
+  // anything injected into them, so rather than tracking readiness
+  // on the table as a whole (which would skip re-adding icons to
+  // cells Vue has quietly replaced), each cell icon is marked with
+  // .my-mb-quicklink and every cell is checked for one on every
+  // pass. The actions row itself is simpler to re-check wholesale,
+  // since Vue replaces it (if at all) as a single unit.
   function addMarkbookQuickLinks() {
     if (!isMarkbookPage()) return;
 
@@ -469,26 +470,6 @@
       if (match) gradableAssessmentIds.add(match[1]);
     });
 
-    table
-      .querySelectorAll('th[data-test^="markbook-assessment-"]')
-      .forEach((th) => {
-        if (th.querySelector(".my-mb-quicklink")) return;
-
-        const match = (th.dataset.test || "").match(
-          /^markbook-assessment-(\d+)$/
-        );
-        if (!match || !gradableAssessmentIds.has(match[1])) return;
-
-        th.style.position = "relative";
-        th.appendChild(
-          buildMarkbookQuickLink({
-            extraClass: "my-mb-quicklink--header",
-            href: buildMarkAllStudentsHref(match[1]),
-            title: "Mark all students",
-          })
-        );
-      });
-
     gradableCells.forEach((cell) => {
       if (cell.querySelector(".my-mb-quicklink")) return;
 
@@ -500,29 +481,110 @@
       const [, assessmentId, studentId] = match;
       cell.style.position = "relative";
       cell.appendChild(
-        buildMarkbookQuickLink({
-          extraClass: "my-mb-quicklink--cell",
-          href: `/learning/assessments/${assessmentId}/${studentId}/responses`,
-          title: "Open this student's response",
-        })
+        buildMarkbookCellLink(
+          `/learning/assessments/${assessmentId}/${studentId}/responses`,
+          "Open this student's response"
+        )
       );
     });
+
+    addMarkbookActionsRow(table, gradableAssessmentIds);
   }
 
-  function buildMarkbookQuickLink({ extraClass, href, title }) {
+  function buildMarkbookCellLink(href, title) {
     const link = document.createElement("a");
-    link.className = `my-mb-quicklink ${extraClass}`;
+    link.className = "my-mb-quicklink my-mb-quicklink--cell";
     link.href = href;
     link.title = title;
     link.setAttribute("aria-label", title);
     link.textContent = "↗";
-    // Keep the click from also triggering the header's sort toggle
-    // or the cell's own pop-out menu - navigation itself is left
-    // alone (no preventDefault), so ctrl/cmd-click still opens a new
-    // tab as normal.
+    // Keep the click from also opening the cell's own pop-out menu -
+    // navigation itself is left alone (no preventDefault), so
+    // ctrl/cmd-click still opens a new tab as normal.
     link.addEventListener("click", (event) => {
       event.stopPropagation();
     });
+    return link;
+  }
+
+  // Inserts a plain horizontal row ("Go to marking") directly under
+  // the unit-titles row (tr.course-headers) and above tr.average-
+  // headers, with one "Mark all" pill per gradable assessment
+  // column - unlike the diagonal header rows above it, this row
+  // isn't rotated, so it's a much more legible place for a link than
+  // squeezed inside the slanted header cell itself.
+  function addMarkbookActionsRow(table, gradableAssessmentIds) {
+    if (table.querySelector(".my-mb-actions-row")) return;
+
+    const courseHeadersRow = table.querySelector("tr.course-headers");
+    const rotateHeadersRow = table.querySelector("tr.rotate-headers");
+    const averageHeadersRow = table.querySelector("tr.average-headers");
+    if (!courseHeadersRow || !rotateHeadersRow || !averageHeadersRow) return;
+
+    const columns = Array.from(rotateHeadersRow.children);
+    const leadCells = Array.from(courseHeadersRow.children).slice(0, 3);
+    if (columns.length < 3 || leadCells.length < 3) return;
+
+    const row = document.createElement("tr");
+    row.className = "my-mb-actions-row";
+
+    // Student / average / rank are merged into one labelled cell -
+    // copy their classes across so any sticky-left column behaviour
+    // those three th's rely on still applies to the merged one.
+    const leadClasses = new Set();
+    leadCells.forEach((cell) =>
+      cell.classList.forEach((cls) => leadClasses.add(cls))
+    );
+
+    const leadTh = document.createElement("th");
+    leadTh.colSpan = 3;
+    leadTh.className = Array.from(leadClasses)
+      .concat("my-mb-actions-lead")
+      .join(" ");
+    leadTh.textContent = "Go to marking →";
+    row.appendChild(leadTh);
+
+    for (let i = 3; i < columns.length; i++) {
+      const th = document.createElement("th");
+
+      const match = (columns[i].dataset.test || "").match(
+        /^markbook-assessment-(\d+)$/
+      );
+      if (match && gradableAssessmentIds.has(match[1])) {
+        const assessmentId = match[1];
+        const titleLink = columns[i].querySelector(
+          'a[href*="/learning/assessments/"]'
+        );
+        const title = titleLink ? titleLink.textContent.trim() : "";
+        th.appendChild(buildMarkAllPill(assessmentId, title));
+      }
+
+      row.appendChild(th);
+    }
+
+    courseHeadersRow.insertAdjacentElement("afterend", row);
+  }
+
+  // Lucide's "list-checks" icon (ISC licence), inlined rather than
+  // pulled in as a dependency - just a static SVG string.
+  const MARK_ALL_ICON_SVG =
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+    'stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+    '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/>' +
+    '<path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>';
+
+  function buildMarkAllPill(assessmentId, assessmentTitle) {
+    const link = document.createElement("a");
+    link.className = "my-mb-markall";
+    link.href = buildMarkAllStudentsHref(assessmentId);
+    link.setAttribute(
+      "aria-label",
+      assessmentTitle
+        ? `Mark all students: ${assessmentTitle}`
+        : "Mark all students"
+    );
+    link.innerHTML = `${MARK_ALL_ICON_SVG}<span>Mark all</span>`;
     return link;
   }
 
