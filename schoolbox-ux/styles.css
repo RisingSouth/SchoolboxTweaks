@@ -156,6 +156,56 @@
 }
 
 /*
+  Shared base for the Markbook's "quick link" icons (header: mark
+  all students; cell: open this student's response). Positioned
+  absolute within the header/cell, which has position: relative set
+  inline in JS only on the elements that get one, so the icon sits
+  in a corner without affecting the table's own layout or widths.
+*/
+.my-mb-quicklink {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  color: rgb(59, 130, 189);
+  font-size: 9px;
+  line-height: 1;
+  text-decoration: none;
+  z-index: 2;
+}
+
+.my-mb-quicklink:hover {
+  background: rgb(59, 130, 189);
+  color: white;
+}
+
+/* Tucked in the header's top-right corner, clear of the title link
+   (left-aligned) and the diagonal header text. */
+.my-mb-quicklink--header {
+  top: 2px;
+  right: 2px;
+}
+
+/* Hidden until the cell is hovered, so it doesn't clutter the table
+   at a glance - tucked in the bottom-right corner, clear of the
+   mark/grade text. */
+.my-mb-quicklink--cell {
+  bottom: 1px;
+  right: 1px;
+  opacity: 0;
+  transition: opacity 0.1s ease-in-out;
+}
+
+td[data-pop-out-menu="true"]:hover .my-mb-quicklink--cell {
+  opacity: 1;
+}
+
+/*
   Dropdown panel with the "other apps" links. Appended straight to
   <body> and positioned "fixed" using coordinates computed from the
   nav button's on-screen position (set inline in JS), rather than

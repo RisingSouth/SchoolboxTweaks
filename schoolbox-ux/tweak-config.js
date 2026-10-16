@@ -79,6 +79,11 @@ const TWEAK_GROUPS = [
         label: "Assessment bucket shading",
         description: "Colour-tints project bucket columns",
       },
+      {
+        id: "markbookQuickLinks",
+        label: "Quick links",
+        description: "Mark-all and open-response shortcuts on gradable columns",
+      },
     ],
   },
   {

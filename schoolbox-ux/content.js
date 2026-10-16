@@ -26,6 +26,7 @@
     if (tweakToggles.markbookFilters) addFilterToggleOnMarkbook();
     if (tweakToggles.markbookSort) addSortableMarkbookColumns();
     if (tweakToggles.markbookShading) addAssessmentTypeShading();
+    if (tweakToggles.markbookQuickLinks) addMarkbookQuickLinks();
     if (tweakToggles.classesGridQuickLinks) addQuickLinksOnClassesPage();
     if (tweakToggles.classListFlagFilter) addPastoralFlagFilter();
     if (tweakToggles.classListPmiBadge) addPmiBadges();
@@ -437,6 +438,108 @@
         }
       });
     });
+  }
+
+  // Adds two small navigation shortcuts to the Markbook table:
+  //  - one per assessment header, to that assessment's own "mark all
+  //    students" status page - only for assessments that actually
+  //    have gradable task cells, since Learning Activities and
+  //    Reported Grade columns have nothing to mark;
+  //  - one per gradable cell, visible on hover, straight to that
+  //    student's response for that assessment.
+  // Vue re-renders cells/headers (e.g. when filters change), wiping
+  // out anything injected into them, so rather than tracking
+  // readiness on the table as a whole (which would skip re-adding
+  // links to cells Vue has quietly replaced), each link is marked
+  // with .my-mb-quicklink and every header/cell is checked for one
+  // on every pass.
+  function addMarkbookQuickLinks() {
+    if (!isMarkbookPage()) return;
+
+    const table = document.querySelector(".diagonal-headings-table");
+    if (!table) return;
+
+    const gradableCells = table.querySelectorAll('td[data-pop-out-menu="true"]');
+
+    const gradableAssessmentIds = new Set();
+    gradableCells.forEach((cell) => {
+      const match = (cell.dataset.test || "").match(
+        /^markbook-cell-(\d+)-(\d+)$/
+      );
+      if (match) gradableAssessmentIds.add(match[1]);
+    });
+
+    table
+      .querySelectorAll('th[data-test^="markbook-assessment-"]')
+      .forEach((th) => {
+        if (th.querySelector(".my-mb-quicklink")) return;
+
+        const match = (th.dataset.test || "").match(
+          /^markbook-assessment-(\d+)$/
+        );
+        if (!match || !gradableAssessmentIds.has(match[1])) return;
+
+        th.style.position = "relative";
+        th.appendChild(
+          buildMarkbookQuickLink({
+            extraClass: "my-mb-quicklink--header",
+            href: buildMarkAllStudentsHref(match[1]),
+            title: "Mark all students",
+          })
+        );
+      });
+
+    gradableCells.forEach((cell) => {
+      if (cell.querySelector(".my-mb-quicklink")) return;
+
+      const match = (cell.dataset.test || "").match(
+        /^markbook-cell-(\d+)-(\d+)$/
+      );
+      if (!match) return;
+
+      const [, assessmentId, studentId] = match;
+      cell.style.position = "relative";
+      cell.appendChild(
+        buildMarkbookQuickLink({
+          extraClass: "my-mb-quicklink--cell",
+          href: `/learning/assessments/${assessmentId}/${studentId}/responses`,
+          title: "Open this student's response",
+        })
+      );
+    });
+  }
+
+  function buildMarkbookQuickLink({ extraClass, href, title }) {
+    const link = document.createElement("a");
+    link.className = `my-mb-quicklink ${extraClass}`;
+    link.href = href;
+    link.title = title;
+    link.setAttribute("aria-label", title);
+    link.textContent = "↗";
+    // Keep the click from also triggering the header's sort toggle
+    // or the cell's own pop-out menu - navigation itself is left
+    // alone (no preventDefault), so ctrl/cmd-click still opens a new
+    // tab as normal.
+    link.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    return link;
+  }
+
+  // Builds the "returnUrl" query value Schoolbox's own links use to
+  // bring you back to this exact Markbook view (filters and all)
+  // afterwards: base64 of the path, a literal "?", then base64 of
+  // the query string with its leading "?" stripped. Both halves use
+  // standard base64 with the "=" padding trimmed off, matching the
+  // format Schoolbox generates for its own links.
+  function buildMarkAllStudentsHref(assessmentId) {
+    const path = toBase64NoPad(window.location.pathname);
+    const query = toBase64NoPad(window.location.search.replace(/^\?/, ""));
+    return `/learning/assessments/${assessmentId}/status?returnUrl=${path}?${query}&5[4]=1`;
+  }
+
+  function toBase64NoPad(value) {
+    return btoa(value).replace(/=+$/, "");
   }
 
   // On a class homepage, Schoolbox already has a "Class Actions" menu
