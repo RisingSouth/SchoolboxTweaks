@@ -112,6 +112,16 @@ const TWEAK_GROUPS = [
     ],
   },
   {
+    name: "Course list",
+    tweaks: [
+      {
+        id: "courseListImprovements",
+        label: "Pinned courses, filters and quick actions",
+        description: "Pin courses, filter by campus and level, and show quick actions on hover",
+      },
+    ],
+  },
+  {
     name: "Course import",
     tweaks: [
       {

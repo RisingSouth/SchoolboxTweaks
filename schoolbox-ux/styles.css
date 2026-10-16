@@ -955,41 +955,41 @@ body.my-pastoral-panel-open #content {
 
 /* Additive hide, kept entirely separate from whatever the site's own
    search filter does to a row - never used to "unhide" anything. */
-.my-cl-hidden {
+body.my-tweak-course-list .my-cl-hidden {
   display: none !important;
 }
 
-#course-selector-results ul.information-list {
+body.my-tweak-course-list #course-selector-results ul.information-list {
   display: flex;
   flex-direction: column;
 }
 
-#course-selector-results li[data-course-row] {
+body.my-tweak-course-list #course-selector-results li[data-course-row] {
   order: 1;
 }
 
-#course-selector-results li[data-course-row].my-cl-pinned {
+body.my-tweak-course-list #course-selector-results li[data-course-row].my-cl-pinned {
   order: -1;
   border-left: 3px solid #d49a00;
 }
 
 /* Reserves room on the right so our pill + the site's own ⋮ menu never
    overlap the row's hover tools. */
-#course-selector-results li[data-course-row] div.list-item {
+body.my-tweak-course-list #course-selector-results li[data-course-row] div.list-item {
   padding-right: 120px;
 }
 
 /* Our pill replaces the site's own expand chevron on rows that have
    one - rows without a pill keep the site's chevron. */
-#course-selector-results li.my-cl-has-pill [data-collapser] {
+body.my-tweak-course-list #course-selector-results li.my-cl-has-pill [data-collapser] {
   display: none;
 }
 
-#course-selector-results li[data-course-row]:hover {
+body.my-tweak-course-list #course-selector-results li[data-course-row]:hover {
   background: #f3f9fb;
 }
 
-.my-cl-heading {
+body.my-tweak-course-list .my-cl-heading {
   list-style: none;
   padding: 10px 4px 4px;
   font-size: 0.72em;
@@ -999,18 +999,18 @@ body.my-pastoral-panel-open #content {
   text-transform: uppercase;
 }
 
-.my-cl-heading--pinned {
+body.my-tweak-course-list .my-cl-heading--pinned {
   order: -2;
 }
 
-.my-cl-heading--all {
+body.my-tweak-course-list .my-cl-heading--all {
   order: 0;
 }
 
 /* Shown only when there are zero pinned courses - a muted one-line
    hint above the "ALL COURSES" text, toggled via class (not text) so
    it never needs its own setTextIfChanged call. */
-.my-cl-heading--all.my-cl-show-pin-hint::before {
+body.my-tweak-course-list .my-cl-heading--all.my-cl-show-pin-hint::before {
   content: "★ Star a course to pin it to the top.";
   display: block;
   font-size: 0.85em;
@@ -1024,7 +1024,7 @@ body.my-pastoral-panel-open #content {
 /* Lets the star/title+meta/tools sit in three columns without ever
    re-parenting the title link or the meta paragraph - both stay
    exactly where Schoolbox put them, just placed onto the grid. */
-#course-selector-results li[data-course-row] div.card {
+body.my-tweak-course-list #course-selector-results li[data-course-row] div.card {
   display: grid;
   grid-template-columns: auto 1fr auto;
   grid-template-rows: auto auto;
@@ -1032,17 +1032,17 @@ body.my-pastoral-panel-open #content {
   column-gap: 10px;
 }
 
-#course-selector-results li[data-course-row] div.card > a[data-course-link] {
+body.my-tweak-course-list #course-selector-results li[data-course-row] div.card > a[data-course-link] {
   grid-column: 2;
   grid-row: 1;
 }
 
-#course-selector-results li[data-course-row] div.card > p.meta {
+body.my-tweak-course-list #course-selector-results li[data-course-row] div.card > p.meta {
   grid-column: 2;
   grid-row: 2;
 }
 
-.my-cl-pin-star {
+body.my-tweak-course-list .my-cl-pin-star {
   grid-column: 1;
   grid-row: 1 / 3;
   width: 28px;
@@ -1058,23 +1058,23 @@ body.my-pastoral-panel-open #content {
   padding: 0;
 }
 
-#course-selector-results li[data-course-row]:hover .my-cl-pin-star,
-.my-cl-pin-star:focus-visible {
+body.my-tweak-course-list #course-selector-results li[data-course-row]:hover .my-cl-pin-star,
+body.my-tweak-course-list .my-cl-pin-star:focus-visible {
   opacity: 1;
 }
 
-.my-cl-pin-star:hover {
+body.my-tweak-course-list .my-cl-pin-star:hover {
   color: #d49a00;
 }
 
-.my-cl-pin-star--active {
+body.my-tweak-course-list .my-cl-pin-star--active {
   color: #d49a00;
   opacity: 1;
   background: transparent;
   border: 0;
 }
 
-.my-cl-tools {
+body.my-tweak-course-list .my-cl-tools {
   grid-column: 3;
   grid-row: 1 / 3;
   display: flex;
@@ -1085,18 +1085,18 @@ body.my-pastoral-panel-open #content {
   visibility: hidden;
 }
 
-#course-selector-results li[data-course-row]:hover .my-cl-tools,
-#course-selector-results li[data-course-row]:focus-within .my-cl-tools {
+body.my-tweak-course-list #course-selector-results li[data-course-row]:hover .my-cl-tools,
+body.my-tweak-course-list #course-selector-results li[data-course-row]:focus-within .my-cl-tools {
   visibility: visible;
 }
 
 @media (hover: none) {
-  .my-cl-tools {
+  body.my-tweak-course-list .my-cl-tools {
     visibility: visible;
   }
 }
 
-.my-cl-tool-btn {
+body.my-tweak-course-list .my-cl-tool-btn {
   display: inline-flex;
   align-items: center;
   height: 28px;
@@ -1112,12 +1112,12 @@ body.my-pastoral-panel-open #content {
   white-space: nowrap;
 }
 
-.my-cl-tool-btn:hover {
+body.my-tweak-course-list .my-cl-tool-btn:hover {
   background: rgba(30, 105, 128, 0.12);
 }
 
-.my-cl-units-pill,
-#course-selector-results nav .my-cl-units-pill {
+body.my-tweak-course-list .my-cl-units-pill,
+body.my-tweak-course-list #course-selector-results nav .my-cl-units-pill {
   display: inline-flex;
   align-items: center;
   width: auto !important;
@@ -1136,12 +1136,12 @@ body.my-pastoral-panel-open #content {
   cursor: pointer;
 }
 
-.my-cl-units-pill:hover {
+body.my-tweak-course-list .my-cl-units-pill:hover {
   background: #d9e6ea;
   color: rgb(30, 105, 128);
 }
 
-.my-cl-units-label {
+body.my-tweak-course-list .my-cl-units-label {
   width: 100%;
   margin: 6px 0 2px;
   font-size: 0.72em;
@@ -1151,24 +1151,24 @@ body.my-pastoral-panel-open #content {
   text-transform: uppercase;
 }
 
-div[data-collapsable] .unit-list {
+body.my-tweak-course-list div[data-collapsable] .unit-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-div[data-collapsable] .unit-list li {
+body.my-tweak-course-list div[data-collapsable] .unit-list li {
   width: auto;
 }
 
-div[data-collapsable] .unit-list li div.card {
+body.my-tweak-course-list div[data-collapsable] .unit-list li div.card {
   display: flex;
   align-items: center;
   padding: 4px 10px;
   border-radius: 999px;
 }
 
-.my-cl-filterbar {
+body.my-tweak-course-list .my-cl-filterbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1178,28 +1178,28 @@ div[data-collapsable] .unit-list li div.card {
   border-bottom: 1px solid #e5e5e5;
 }
 
-.my-cl-chip-group {
+body.my-tweak-course-list .my-cl-chip-group {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
 
-.my-cl-chip-group:not(:first-child)::before {
+body.my-tweak-course-list .my-cl-chip-group:not(:first-child)::before {
   content: "";
   width: 1px;
   height: 20px;
   background: #d5dae0;
 }
 
-.my-cl-chip-group-label {
+body.my-tweak-course-list .my-cl-chip-group-label {
   font-size: 0.78em;
   font-weight: 700;
   color: #66727f;
   margin-right: 4px;
 }
 
-.my-cl-chip {
+body.my-tweak-course-list .my-cl-chip {
   display: inline-flex;
   align-items: center;
   height: 26px;
@@ -1212,37 +1212,37 @@ div[data-collapsable] .unit-list li div.card {
   cursor: pointer;
 }
 
-.my-cl-chip:hover {
+body.my-tweak-course-list .my-cl-chip:hover {
   border-color: rgb(30, 105, 128);
 }
 
-.my-cl-chip:focus-visible,
-.my-cl-pin-star:focus-visible,
-.my-cl-tool-btn:focus-visible,
-.my-cl-units-pill:focus-visible,
-.my-cl-reset:focus-visible {
+body.my-tweak-course-list .my-cl-chip:focus-visible,
+body.my-tweak-course-list .my-cl-pin-star:focus-visible,
+body.my-tweak-course-list .my-cl-tool-btn:focus-visible,
+body.my-tweak-course-list .my-cl-units-pill:focus-visible,
+body.my-tweak-course-list .my-cl-reset:focus-visible {
   outline: 2px solid rgb(30, 105, 128);
   outline-offset: 2px;
 }
 
-.my-cl-chip--active {
+body.my-tweak-course-list .my-cl-chip--active {
   border-color: rgb(30, 105, 128);
   background: rgb(30, 105, 128);
   color: #fff;
 }
 
-.my-cl-chip--pinned-toggle.my-cl-chip--active {
+body.my-tweak-course-list .my-cl-chip--pinned-toggle.my-cl-chip--active {
   border-color: #d49a00;
   background: #d49a00;
 }
 
-.my-cl-count {
+body.my-tweak-course-list .my-cl-count {
   margin-left: auto;
   font-size: 0.82em;
   color: #666;
 }
 
-.my-cl-reset {
+body.my-tweak-course-list .my-cl-reset {
   border: none;
   background: none;
   color: rgb(30, 105, 128);

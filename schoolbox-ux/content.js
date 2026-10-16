@@ -38,16 +38,22 @@
     if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
     if (tweakToggles.pastoralRecordHistoryPanel) addPastoralRecordHistoryPanel();
 
-    // No toggle of its own yet (nothing in tweak-config.js) - runs
-    // unconditionally like addNavBarButton() below, gated purely by
-    // isCourseListPage() internally.
-    initCourseListPage();
+    if (tweakToggles.courseListImprovements) initCourseListPage();
 
     // Pure-CSS tweak (see styles.css) - toggled via a body class
     // rather than a call to skip, since there's no DOM to build.
     document.body.classList.toggle(
       "my-tweak-full-height-table",
       !!tweakToggles.markbookFullHeight
+    );
+
+    // Same pattern - the course-list CSS rules are scoped under this
+    // body class so switching the toggle off leaves nothing styled
+    // even if initCourseListPage() already ran once and injected its
+    // elements before the toggle was flipped.
+    document.body.classList.toggle(
+      "my-tweak-course-list",
+      !!tweakToggles.courseListImprovements
     );
   }
 
