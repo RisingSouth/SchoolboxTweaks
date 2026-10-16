@@ -38,6 +38,11 @@
     if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
     if (tweakToggles.pastoralRecordHistoryPanel) addPastoralRecordHistoryPanel();
 
+    // No toggle of its own yet (nothing in tweak-config.js) - runs
+    // unconditionally like addNavBarButton() below, gated purely by
+    // isCourseListPage() internally.
+    initCourseListPage();
+
     // Pure-CSS tweak (see styles.css) - toggled via a body class
     // rather than a call to skip, since there's no DOM to build.
     document.body.classList.toggle(
@@ -2991,6 +2996,631 @@
     document.body.appendChild(panel);
 
     if (pastoralPanelAlwaysOpen) openPanel();
+  }
+
+  // ---------------------------------------------------------------
+  // Course List page (/course/list)
+  //
+  // Everything here is purely additive: the site's own jQuery
+  // courseSelector JS depends on the ~515 li[data-course-row] nodes
+  // and their internal structure (its own search filter shows/hides
+  // rows by some mechanism of its own), so nothing here ever moves,
+  // removes or re-parents one of those rows or anything inside them.
+  // New elements (star buttons, tool links, unit pills, heading rows)
+  // are only ever inserted as new siblings/children; visual grouping
+  // (pinned-first) is done with flex `order`, and our own hiding uses
+  // a dedicated `my-cl-hidden` class so it can never collide with or
+  // "undo" whatever the site's search box hides on its own.
+  // ---------------------------------------------------------------
+
+  function isCourseListPage() {
+    return /^\/course\/list\/?$/.test(window.location.pathname);
+  }
+
+  // Lazily populated the first time initCourseListPage() can reach
+  // chrome.storage.sync - pinned course ids and saved chip selections
+  // both live here for the rest of the page's life. Kept as Sets so
+  // toggling membership and checking "is this selected" are both O(1).
+  let courseListState = null;
+  let courseListStateLoading = false;
+  let courseListChipsBuilt = false;
+  let courseListObserver = null;
+  let courseListObserverTimer = null;
+  let courseListSearchFocusAttempted = false;
+  let courseListCountTextEl = null;
+
+  function loadCourseListState(onReady) {
+    if (courseListState) {
+      onReady();
+      return;
+    }
+    if (courseListStateLoading) return;
+    courseListStateLoading = true;
+
+    try {
+      chrome.storage.sync.get(
+        { pinnedCourses: [], courseListFilters: {} },
+        (result) => {
+          courseListStateLoading = false;
+          const filters = result.courseListFilters || {};
+          courseListState = {
+            pinned: new Set(result.pinnedCourses || []),
+            campuses: new Set(filters.campuses || []),
+            levels: new Set(filters.levels || []),
+            other: !!filters.other,
+            pinnedOnly: !!filters.pinnedOnly,
+          };
+          onReady();
+        }
+      );
+    } catch (e) {
+      // A storage failure shouldn't leave the page half-built - fall
+      // back to "nothing pinned, no filters" and carry on.
+      courseListStateLoading = false;
+      courseListState = {
+        pinned: new Set(),
+        campuses: new Set(),
+        levels: new Set(),
+        other: false,
+        pinnedOnly: false,
+      };
+      onReady();
+    }
+  }
+
+  function saveCourseListPinned() {
+    if (!courseListState) return;
+    try {
+      chrome.storage.sync.set({
+        pinnedCourses: Array.from(courseListState.pinned),
+      });
+    } catch (e) {
+      // Pinning stays working in-page even if the write fails; it
+      // just won't survive a reload.
+    }
+  }
+
+  function saveCourseListFilters() {
+    if (!courseListState) return;
+    try {
+      chrome.storage.sync.set({
+        courseListFilters: {
+          campuses: Array.from(courseListState.campuses),
+          levels: Array.from(courseListState.levels),
+          other: courseListState.other,
+          pinnedOnly: courseListState.pinnedOnly,
+        },
+      });
+    } catch (e) {
+      // Same as above - filtering still works for the rest of this
+      // page view even if persisting it fails.
+    }
+  }
+
+  function initCourseListPage() {
+    if (!isCourseListPage()) return;
+
+    focusCourseSearchOnLoad();
+
+    const resultsRoot = document.querySelector("#course-selector-results");
+    if (!resultsRoot) return;
+
+    const rows = resultsRoot.querySelectorAll("li[data-course-row]");
+    if (!rows.length) return;
+
+    ensureCourseListObserver(resultsRoot);
+
+    loadCourseListState(() => {
+      rows.forEach(setupCourseListRow);
+      ensureCourseListChipBar(resultsRoot.querySelectorAll("li[data-course-row]"));
+      ensureCourseListHeadingRows(resultsRoot);
+      applyCourseListFilters();
+    });
+  }
+
+  // Schoolbox re-renders this results list (e.g. as its own search
+  // runs), which can wipe out anything injected into a row. Debounced
+  // so a burst of mutations (the initial ~515-row render, or the site
+  // re-rendering many rows at once) collapses into a single re-run
+  // rather than one per row.
+  function ensureCourseListObserver(resultsRoot) {
+    if (courseListObserver) return;
+
+    courseListObserver = new MutationObserver(() => {
+      clearTimeout(courseListObserverTimer);
+      courseListObserverTimer = setTimeout(initCourseListPage, 150);
+    });
+    courseListObserver.observe(resultsRoot, { childList: true, subtree: true });
+  }
+
+  // Only ever attempted once, the moment #course-search first shows
+  // up - re-focusing on every later pass would steal focus back from
+  // whatever the teacher clicked into since.
+  function focusCourseSearchOnLoad() {
+    if (courseListSearchFocusAttempted) return;
+
+    const input = document.querySelector("#course-search");
+    if (!input) return;
+    courseListSearchFocusAttempted = true;
+
+    if (window.location.hash) return;
+
+    const active = document.activeElement;
+    const nothingFocused =
+      !active || active === document.body || active === document.documentElement;
+    if (nothingFocused) input.focus();
+  }
+
+  // Reads a row's "Campus Courses > Category Courses" meta line once
+  // and caches the result on the li's own dataset - the text never
+  // changes for a given row, so there's no reason to re-parse it on
+  // every pass. Rows with no ">" at all (seen so far: "Test Courses",
+  // "Past Parent") have neither a campus nor a level and are flagged
+  // as "other" instead.
+  function parseCourseListMeta(li) {
+    const metaEl = li.querySelector("div.card p.meta");
+    const text = metaEl ? metaEl.textContent.trim() : "";
+
+    if (!text.includes(">")) {
+      return { campus: null, level: null, other: true };
+    }
+
+    const [campusPart, categoryPart] = text.split(">").map((s) => s.trim());
+    const campus = campusPart
+      .replace(/\bCampus\b/gi, "")
+      .replace(/\bCourses\b/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    let level = null;
+    if (/secondary/i.test(categoryPart)) level = "Secondary";
+    else if (/primary/i.test(categoryPart)) level = "Primary";
+
+    return { campus: campus || null, level, other: false };
+  }
+
+  function setupCourseListRow(li) {
+    if (li.classList.contains("my-cl-ready")) return;
+
+    const card = li.querySelector("div.card");
+    if (!card) return;
+
+    const link = card.querySelector("a[data-course-link]");
+    if (!link) return;
+
+    const courseId = link.getAttribute("data-course-id");
+    if (!courseId) return;
+    const courseName = link.getAttribute("data-course-name") || link.textContent.trim();
+
+    li.dataset.myCourseId = courseId;
+
+    const meta = parseCourseListMeta(li);
+    li.dataset.myCampus = meta.campus || "";
+    li.dataset.myLevel = meta.level || "";
+    li.dataset.myOther = meta.other ? "1" : "";
+
+    // Sibling BEFORE the link, inside the card - never inside the
+    // anchor itself, so clicking the star can never trigger a
+    // navigation.
+    card.insertBefore(buildCoursePinStar(courseId, courseName), card.firstChild);
+
+    const tools = buildCourseListTools(li, courseId);
+    if (tools) {
+      const metaEl = card.querySelector("p.meta");
+      if (metaEl) metaEl.insertAdjacentElement("afterend", tools);
+      else card.appendChild(tools);
+    }
+
+    addCourseListUnitsPill(li, courseId);
+
+    li.classList.add("my-cl-ready");
+  }
+
+  function buildCoursePinStar(courseId, courseName) {
+    const star = document.createElement("button");
+    star.type = "button";
+    star.className = "my-cl-pin-star";
+    updateCoursePinStar(star, courseId, courseName);
+
+    star.addEventListener("click", (event) => {
+      // Belt-and-suspenders: the star is already a sibling of the
+      // link, not inside it, but stopping propagation here means a
+      // future markup change on Schoolbox's side can't suddenly turn
+      // this into a navigation.
+      event.preventDefault();
+      event.stopPropagation();
+      toggleCoursePinned(courseId, courseName);
+    });
+
+    return star;
+  }
+
+  function updateCoursePinStar(star, courseId, courseName) {
+    const pinned = courseListState.pinned.has(courseId);
+    star.classList.toggle("my-cl-pin-star--active", pinned);
+    star.setAttribute("aria-pressed", pinned ? "true" : "false");
+    star.setAttribute("aria-label", (pinned ? "Unpin " : "Pin ") + courseName);
+    star.textContent = "★";
+  }
+
+  function toggleCoursePinned(courseId, courseName) {
+    if (!courseListState) return;
+
+    if (courseListState.pinned.has(courseId)) {
+      courseListState.pinned.delete(courseId);
+    } else {
+      courseListState.pinned.add(courseId);
+    }
+
+    const li = document.querySelector(
+      `li[data-course-row][data-my-course-id="${courseId}"]`
+    );
+    if (li) {
+      const star = li.querySelector(".my-cl-pin-star");
+      if (star) updateCoursePinStar(star, courseId, courseName);
+    }
+
+    saveCourseListPinned();
+    applyCourseListFilters();
+  }
+
+  // Builds the quick-actions row for one course from its own (already
+  // server-rendered, already-hidden) actions dropdown - no network
+  // request, just reading hrefs that are already sitting in the DOM.
+  // The dropdown can end up attached directly to <body> once Foundation
+  // (the site's dropdown JS) has initialised it, so this looks it up
+  // by id globally rather than assuming it's still nested under `li`.
+  function buildCourseListTools(li, courseId) {
+    const dropdown = document.getElementById(`courseDropdown-${courseId}`);
+    if (!dropdown) return null;
+
+    const tools = document.createElement("div");
+    tools.className = "my-cl-tools";
+
+    const findLink = (prefix) =>
+      dropdown.querySelector(`a[data-test^="${prefix}"]`);
+
+    const addToolLink = (source, label) => {
+      if (!source) return;
+      const a = document.createElement("a");
+      a.href = source.getAttribute("href");
+      a.textContent = label;
+      a.className = "my-cl-tool-btn";
+      tools.appendChild(a);
+    };
+
+    const homepage = findLink("course-list-homepage-");
+
+    addToolLink(findLink("course-list-planner-"), "Unit Planner");
+    addToolLink(findLink("course-list-markbook-"), "Course Markbook");
+    addToolLink(findLink("course-list-calendar-"), "Assessment Calendar");
+    addToolLink(homepage, "Homepage");
+
+    // Foundation's own dropdown trigger convention: an element with
+    // data-dropdown="<target id>" toggles the matching #<target id>
+    // panel. Clicking it (rather than trying to open the dropdown
+    // ourselves) means its positioning/outside-click-to-close logic
+    // all keep working unmodified.
+    const trigger =
+      li.querySelector(`[data-dropdown="courseDropdown-${courseId}"]`) ||
+      document.querySelector(
+        `[data-dropdown="courseDropdown-${courseId}"][aria-controls], [aria-controls="courseDropdown-${courseId}"]`
+      );
+
+    if (trigger) {
+      const moreBtn = document.createElement("button");
+      moreBtn.type = "button";
+      moreBtn.className = "my-cl-tool-btn my-cl-tool-btn--more";
+      moreBtn.textContent = "⋯";
+      moreBtn.setAttribute("aria-label", "More actions");
+      moreBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        trigger.click();
+      });
+      tools.appendChild(moreBtn);
+    } else if (homepage) {
+      // Couldn't find a clickable trigger for the existing dropdown -
+      // falls back to a plain link to the course homepage instead, as
+      // agreed for this case.
+      const a = document.createElement("a");
+      a.href = homepage.getAttribute("href");
+      a.textContent = "⋯";
+      a.className = "my-cl-tool-btn my-cl-tool-btn--more";
+      a.setAttribute("aria-label", "Course Homepage");
+      tools.appendChild(a);
+    }
+
+    return tools.childElementCount ? tools : null;
+  }
+
+  // Adds the "N units ▾" pill next to a row's existing expand arrow,
+  // and (once per course) a small "Units:" label in front of its unit
+  // list - the unit pills themselves are styled in styles.css.
+  function addCourseListUnitsPill(li, courseId) {
+    const collapser = li.querySelector(`[data-collapser="course-${courseId}"]`);
+    if (!collapser) return;
+
+    const panel = li.querySelector(`[data-collapsable="course-${courseId}"]`);
+    const unitLinks = panel
+      ? panel.querySelectorAll("a.course-unit-link--meta")
+      : [];
+    const count = unitLinks.length;
+    if (!count) return;
+
+    const labelFor = (collapsed) =>
+      `${count} unit${count === 1 ? "" : "s"} ${collapsed ? "▾" : "▴"}`;
+
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = "my-cl-units-pill";
+    pill.setAttribute("aria-label", `Toggle ${count} units`);
+    pill.textContent = labelFor(
+      !panel || panel.getAttribute("data-collapse-state") === "collapsed"
+    );
+
+    pill.addEventListener("click", (event) => {
+      event.preventDefault();
+      collapser.click();
+      // The site's own handler updates data-collapse-state through its
+      // framework's own render cycle rather than synchronously inline
+      // with the click - a microtask is enough to land after that in
+      // every case seen so far, without resorting to a fixed delay.
+      Promise.resolve().then(() => {
+        const collapsed =
+          !panel || panel.getAttribute("data-collapse-state") === "collapsed";
+        pill.textContent = labelFor(collapsed);
+      });
+    });
+
+    collapser.insertAdjacentElement("afterend", pill);
+
+    if (panel && !panel.querySelector(".my-cl-units-label")) {
+      const unitList = panel.querySelector("ul.unit-list");
+      if (unitList) {
+        const unitsLabel = document.createElement("div");
+        unitsLabel.className = "my-cl-units-label";
+        unitsLabel.textContent = "Units:";
+        unitList.insertAdjacentElement("beforebegin", unitsLabel);
+      }
+    }
+  }
+
+  // Built once, the first time there's at least one row to derive the
+  // campus list from - chip selection state then lives entirely in
+  // courseListState for the rest of the page's life.
+  function ensureCourseListChipBar(rows) {
+    if (courseListChipsBuilt) return;
+    if (document.querySelector(".my-cl-filterbar")) {
+      courseListChipsBuilt = true;
+      return;
+    }
+
+    const searchInput = document.querySelector("#course-search");
+    if (!searchInput) return;
+
+    const anchor = searchInput.closest(".row") || searchInput.parentElement;
+    if (!anchor || !anchor.parentNode) return;
+
+    const campuses = new Set();
+    rows.forEach((li) => {
+      const campus = li.dataset.myCampus;
+      if (campus) campuses.add(campus);
+    });
+    const sortedCampuses = Array.from(campuses).sort();
+
+    const bar = document.createElement("div");
+    bar.className = "my-cl-filterbar";
+
+    const onFilterChange = () => {
+      applyCourseListFilters();
+      saveCourseListFilters();
+    };
+
+    const campusGroup = buildCourseListChipGroup(
+      "Campus",
+      sortedCampuses,
+      courseListState.campuses,
+      onFilterChange
+    );
+    const levelGroup = buildCourseListChipGroup(
+      "Level",
+      ["Secondary", "Primary"],
+      courseListState.levels,
+      onFilterChange
+    );
+
+    const otherGroup = document.createElement("div");
+    otherGroup.className = "my-cl-chip-group";
+    const otherChip = buildCourseListToggleChip(
+      "Other",
+      () => courseListState.other,
+      (value) => {
+        courseListState.other = value;
+      },
+      onFilterChange
+    );
+    otherGroup.appendChild(otherChip);
+
+    const pinnedChip = buildCourseListToggleChip(
+      "★ Pinned only",
+      () => courseListState.pinnedOnly,
+      (value) => {
+        courseListState.pinnedOnly = value;
+      },
+      onFilterChange
+    );
+    pinnedChip.classList.add("my-cl-chip--pinned-toggle");
+
+    const countWrap = document.createElement("div");
+    countWrap.className = "my-cl-count";
+
+    courseListCountTextEl = document.createElement("span");
+    courseListCountTextEl.className = "my-cl-count-text";
+    countWrap.appendChild(courseListCountTextEl);
+
+    countWrap.appendChild(document.createTextNode(" · "));
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "my-cl-reset";
+    resetBtn.textContent = "Reset";
+    resetBtn.addEventListener("click", () => {
+      courseListState.campuses.clear();
+      courseListState.levels.clear();
+      courseListState.other = false;
+      courseListState.pinnedOnly = false;
+      bar.querySelectorAll(".my-cl-chip--active").forEach((chip) => {
+        chip.classList.remove("my-cl-chip--active");
+        chip.setAttribute("aria-pressed", "false");
+      });
+      onFilterChange();
+    });
+    countWrap.appendChild(resetBtn);
+
+    bar.appendChild(campusGroup);
+    bar.appendChild(levelGroup);
+    bar.appendChild(otherGroup);
+    bar.appendChild(pinnedChip);
+    bar.appendChild(countWrap);
+
+    anchor.insertAdjacentElement("afterend", bar);
+    courseListChipsBuilt = true;
+  }
+
+  function buildCourseListChipGroup(title, values, selectedSet, onChange) {
+    const group = document.createElement("div");
+    group.className = "my-cl-chip-group";
+
+    const label = document.createElement("span");
+    label.className = "my-cl-chip-group-label";
+    label.textContent = title;
+    group.appendChild(label);
+
+    values.forEach((value) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "my-cl-chip";
+      chip.textContent = value;
+      chip.setAttribute("aria-pressed", selectedSet.has(value) ? "true" : "false");
+      chip.classList.toggle("my-cl-chip--active", selectedSet.has(value));
+      chip.addEventListener("click", () => {
+        if (selectedSet.has(value)) selectedSet.delete(value);
+        else selectedSet.add(value);
+        chip.classList.toggle("my-cl-chip--active", selectedSet.has(value));
+        chip.setAttribute("aria-pressed", selectedSet.has(value) ? "true" : "false");
+        onChange();
+      });
+      group.appendChild(chip);
+    });
+
+    return group;
+  }
+
+  function buildCourseListToggleChip(label, getValue, setValue, onChange) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "my-cl-chip";
+    chip.textContent = label;
+    chip.setAttribute("aria-pressed", getValue() ? "true" : "false");
+    chip.classList.toggle("my-cl-chip--active", getValue());
+    chip.addEventListener("click", () => {
+      const next = !getValue();
+      setValue(next);
+      chip.classList.toggle("my-cl-chip--active", next);
+      chip.setAttribute("aria-pressed", next ? "true" : "false");
+      onChange();
+    });
+    return chip;
+  }
+
+  // Appended at the end of the list (never inserted at the front) so
+  // the site's own rows keep whatever DOM index its courseSelector JS
+  // might rely on - visual position is handled entirely by the flex
+  // `order` values in styles.css, not by where these live in the DOM.
+  function ensureCourseListHeadingRows(resultsRoot) {
+    const list = resultsRoot.querySelector("ul.information-list");
+    if (!list) return;
+    if (list.querySelector(".my-cl-heading--pinned")) return;
+
+    const pinnedHeading = document.createElement("li");
+    pinnedHeading.className = "my-cl-heading my-cl-heading--pinned";
+
+    const allHeading = document.createElement("li");
+    allHeading.className = "my-cl-heading my-cl-heading--all";
+
+    list.appendChild(pinnedHeading);
+    list.appendChild(allHeading);
+  }
+
+  // The single source of truth for which rows are hidden by our own
+  // filters (my-cl-hidden) and which are flagged pinned - re-run after
+  // every chip click, pin toggle, and idempotent-setup pass. Never
+  // touches any hiding the site's own search box has already applied.
+  function applyCourseListFilters() {
+    if (!courseListState) return;
+
+    const resultsRoot = document.querySelector("#course-selector-results");
+    if (!resultsRoot) return;
+
+    const rows = resultsRoot.querySelectorAll("li[data-course-row]");
+
+    let visibleCount = 0;
+    let pinnedVisibleCount = 0;
+
+    rows.forEach((li) => {
+      const courseId = li.dataset.myCourseId;
+      const isPinned = !!courseId && courseListState.pinned.has(courseId);
+      li.classList.toggle("my-cl-pinned", isPinned);
+
+      const isOther = li.dataset.myOther === "1";
+      const campus = li.dataset.myCampus || "";
+      const level = li.dataset.myLevel || "";
+
+      let visible;
+      if (isOther) {
+        visible = courseListState.other;
+      } else {
+        const campusOk =
+          courseListState.campuses.size === 0 ||
+          (!!campus && courseListState.campuses.has(campus));
+        const levelOk =
+          courseListState.levels.size === 0 ||
+          (!!level && courseListState.levels.has(level));
+        visible = campusOk && levelOk;
+      }
+
+      if (visible && courseListState.pinnedOnly && !isPinned) visible = false;
+
+      li.classList.toggle("my-cl-hidden", !visible);
+
+      if (visible) {
+        visibleCount++;
+        if (isPinned) pinnedVisibleCount++;
+      }
+    });
+
+    updateCourseListHeadings(resultsRoot, pinnedVisibleCount, visibleCount - pinnedVisibleCount);
+    updateCourseListCount(rows.length, visibleCount);
+  }
+
+  function updateCourseListHeadings(resultsRoot, pinnedCount, allCount) {
+    const pinnedHeading = resultsRoot.querySelector(".my-cl-heading--pinned");
+    const allHeading = resultsRoot.querySelector(".my-cl-heading--all");
+
+    if (pinnedHeading) {
+      pinnedHeading.textContent = `PINNED · ${pinnedCount} course${
+        pinnedCount === 1 ? "" : "s"
+      }`;
+      pinnedHeading.style.display = pinnedCount === 0 ? "none" : "";
+    }
+    if (allHeading) {
+      allHeading.textContent = `ALL COURSES · ${allCount} matching your filters`;
+    }
+  }
+
+  function updateCourseListCount(total, visible) {
+    if (!courseListCountTextEl) return;
+    courseListCountTextEl.textContent = `Showing ${visible} of ${total} courses`;
   }
 
   // The nav button is the only in-page way back to the toggle once
