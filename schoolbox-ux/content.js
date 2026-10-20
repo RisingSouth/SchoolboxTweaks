@@ -3035,6 +3035,87 @@
   let courseListRunning = false;
   let courseListToolsBuildScheduled = false;
 
+  // Guards the progressive (first-pass + idle-chunked) row setup so the
+  // body-wide MutationObserver - woken by every star/tool/chip-bar node
+  // this itself inserts - can't re-enter and restart it mid-flight.
+  // "Active" covers the whole staged run; "Done" flips once, after the
+  // last chunk, and switches later observer-driven calls back to the
+  // original cheap self-heal pass below.
+  let courseListStagedSetupActive = false;
+  let courseListStagedSetupDone = false;
+
+  // One-shot perf instrumentation for the course list page - see
+  // logCourseListTimings() for what gets logged and why.
+  let clTimingSyncStart = null;
+  let clTimingSyncEnd = null;
+  let clTimingRowsDone = null;
+  let clTimingFirstFilterDone = null;
+  let clTimingLogged = false;
+
+  function clMark(name) {
+    try {
+      performance.mark(name);
+    } catch (e) {
+      // DevTools perf marks are a nice-to-have, never load-bearing.
+    }
+  }
+
+  // Fires once, as soon as the last of the three timing points has
+  // landed (whichever of the first-filter pass or the final chunk's
+  // row setup happens to finish last) - see initCourseListPage,
+  // runCourseListStagedSetup and applyCourseListFilters for where each
+  // of the four timestamps gets set.
+  function logCourseListTimings() {
+    if (clTimingLogged) return;
+    if (
+      clTimingSyncStart === null ||
+      clTimingSyncEnd === null ||
+      clTimingRowsDone === null ||
+      clTimingFirstFilterDone === null
+    ) {
+      return;
+    }
+    clTimingLogged = true;
+
+    try {
+      performance.measure(
+        "sbux-cl-first-sync-pass",
+        "sbux-cl-sync-start",
+        "sbux-cl-sync-end"
+      );
+      performance.measure(
+        "sbux-cl-first-filter",
+        "sbux-cl-sync-start",
+        "sbux-cl-first-filter"
+      );
+      performance.measure(
+        "sbux-cl-full-row-setup",
+        "sbux-cl-sync-start",
+        "sbux-cl-rows-done"
+      );
+    } catch (e) {
+      // Same as above - only the console.log below is required.
+    }
+
+    const round = (n) => Math.round(n * 100) / 100;
+
+    console.log("Schoolbox UX tweaks: course list timings", {
+      firstSyncPassMs: round(clTimingSyncEnd - clTimingSyncStart),
+      firstSyncPassAtMs: round(clTimingSyncEnd),
+      firstFilterMs: round(clTimingFirstFilterDone - clTimingSyncStart),
+      firstFilterAtMs: round(clTimingFirstFilterDone),
+      fullRowSetupMs: round(clTimingRowsDone - clTimingSyncStart),
+      fullRowSetupAtMs: round(clTimingRowsDone),
+    });
+  }
+
+  function markCourseListRowsDone() {
+    if (clTimingRowsDone !== null) return;
+    clTimingRowsDone = performance.now();
+    clMark("sbux-cl-rows-done");
+    logCourseListTimings();
+  }
+
   function loadCourseListState(onReady) {
     if (courseListState) {
       onReady();
@@ -3110,6 +3191,11 @@
     if (courseListRunning) return;
     courseListRunning = true;
 
+    if (clTimingSyncStart === null) {
+      clTimingSyncStart = performance.now();
+      clMark("sbux-cl-sync-start");
+    }
+
     try {
       focusCourseSearchOnLoad();
 
@@ -3119,16 +3205,32 @@
       const rows = resultsRoot.querySelectorAll("li[data-course-row]");
       if (!rows.length) return;
 
+      // The staged setup below (first pass + idle-time chunks) owns row
+      // setup for the rest of this run; any re-entrant call it wakes by
+      // inserting DOM nodes should just back off and let it finish.
+      if (courseListStagedSetupActive) return;
+
       loadCourseListState(() => {
+        if (courseListStagedSetupActive) return;
+
+        if (!courseListStagedSetupDone) {
+          courseListStagedSetupActive = true;
+          runCourseListStagedSetup(resultsRoot, rows);
+          return;
+        }
+
         // The body-wide observer re-runs this on every DOM mutation
         // anywhere on the page, so once everything is already in place
         // (including a row that lost its star and self-healed on a
         // previous pass), this needs to be a cheap no-op rather than
-        // re-walking and re-filtering ~515 rows for nothing.
+        // re-walking and re-filtering ~515 rows for nothing. Rows our
+        // own filters are hiding are intentionally left without a star
+        // (see applyCourseListFilters), so they count as "ready" too.
         const rowsReady = Array.from(rows).every(
           (li) =>
-            li.classList.contains("my-cl-ready") &&
-            !!li.querySelector(".my-cl-pin-star")
+            li.classList.contains("my-cl-hidden") ||
+            (li.classList.contains("my-cl-ready") &&
+              !!li.querySelector(".my-cl-pin-star"))
         );
         const chipBarReady =
           courseListChipsBuilt || !!document.querySelector(".my-cl-filterbar");
@@ -3138,6 +3240,7 @@
 
         let changed = false;
         rows.forEach((li) => {
+          if (li.classList.contains("my-cl-hidden")) return;
           if (setupCourseListRow(li)) changed = true;
         });
         if (
@@ -3152,8 +3255,85 @@
         if (changed) applyCourseListFilters();
       });
     } finally {
+      if (clTimingSyncEnd === null && clTimingSyncStart !== null) {
+        clTimingSyncEnd = performance.now();
+        clMark("sbux-cl-sync-end");
+      }
       courseListRunning = false;
     }
+  }
+
+  // Peeks a row's course id straight off its link, without touching the
+  // dataset/meta-parsing that setupCourseListRow() does - used only to
+  // find which of the not-yet-reached rows are pinned so they can be
+  // pulled into the first pass regardless of their DOM position.
+  function peekCourseListRowCourseId(li) {
+    const link = li.querySelector("div.card a[data-course-link]");
+    return link ? link.getAttribute("data-course-id") : null;
+  }
+
+  // First pass is synchronous (first ~40 rows in DOM order, plus any
+  // already-pinned rows wherever they are), everything after that is
+  // handed to the existing idle scheduler in chunks of ~30 so the rest
+  // of ~515 rows never blocks the main thread in one go. The chip bar,
+  // headings and first applyCourseListFilters run right after the first
+  // pass (so the page is interactive almost immediately); a final
+  // applyCourseListFilters runs again once every row has been reached.
+  function runCourseListStagedSetup(resultsRoot, rowsNodeList) {
+    const rowList = Array.from(rowsNodeList);
+    const FIRST_PASS_COUNT = 40;
+    const CHUNK_SIZE = 30;
+
+    const firstPassRows = rowList.slice(0, Math.min(FIRST_PASS_COUNT, rowList.length));
+    const firstPassSet = new Set(firstPassRows);
+
+    if (courseListState.pinned.size) {
+      for (let i = FIRST_PASS_COUNT; i < rowList.length; i++) {
+        const li = rowList[i];
+        const courseId = peekCourseListRowCourseId(li);
+        if (courseId && courseListState.pinned.has(courseId)) {
+          firstPassRows.push(li);
+          firstPassSet.add(li);
+        }
+      }
+    }
+
+    firstPassRows.forEach((li) => setupCourseListRow(li));
+
+    ensureCourseListChipBar(resultsRoot.querySelectorAll("li[data-course-row]"));
+    ensureCourseListHeadingRows(resultsRoot);
+    ensureCourseListToolsDelegation(resultsRoot);
+
+    applyCourseListFilters();
+
+    const remaining = rowList.filter((li) => !firstPassSet.has(li));
+
+    if (!remaining.length) {
+      markCourseListRowsDone();
+      courseListStagedSetupActive = false;
+      courseListStagedSetupDone = true;
+      return;
+    }
+
+    let index = 0;
+
+    function step() {
+      const end = Math.min(index + CHUNK_SIZE, remaining.length);
+      for (; index < end; index++) {
+        setupCourseListRow(remaining[index]);
+      }
+      if (index < remaining.length) {
+        scheduleCourseListIdleWork(step);
+        return;
+      }
+
+      markCourseListRowsDone();
+      applyCourseListFilters();
+      courseListStagedSetupActive = false;
+      courseListStagedSetupDone = true;
+    }
+
+    scheduleCourseListIdleWork(step);
   }
 
   // Only ever attempted once, the moment #course-search first shows
@@ -3202,37 +3382,95 @@
     return { campus: campus || null, level, other: false };
   }
 
-  function setupCourseListRow(li) {
-    // Treat a row as not-ready (and rebuild it) if the site re-rendered
-    // it and wiped the star back out, even though the li itself kept
-    // its my-cl-ready class - this is what lets a row self-heal without
-    // needing the old dedicated per-row observer.
-    if (li.classList.contains("my-cl-ready") && li.querySelector(".my-cl-pin-star")) {
-      return false;
+  // Figures out whether a row should currently be visible under the
+  // active chip/pinned-only filters, purely from the dataset values
+  // setupCourseListRow() already parsed onto it - shared between that
+  // function (so a just-parsed row never gets a star built if it's
+  // filtered out) and applyCourseListFilters() (the single source of
+  // truth re-run on every chip click, pin toggle and setup pass).
+  function computeCourseListRowVisibility(li) {
+    const courseId = li.dataset.myCourseId;
+    const isPinned = !!courseId && courseListState.pinned.has(courseId);
+    const isOther = li.dataset.myOther === "1";
+    const campus = li.dataset.myCampus || "";
+    const level = li.dataset.myLevel || "";
+
+    let visible;
+    if (isOther) {
+      visible = courseListState.other;
+    } else {
+      const campusOk =
+        courseListState.campuses.size === 0 ||
+        (!!campus && courseListState.campuses.has(campus));
+      const levelOk =
+        courseListState.levels.size === 0 ||
+        (!!level && courseListState.levels.has(level));
+      visible = campusOk && levelOk;
     }
 
+    if (visible && courseListState.pinnedOnly && !isPinned) visible = false;
+
+    return { visible, isPinned };
+  }
+
+  // Parses a row's meta once (cached on its dataset) and, if the row is
+  // currently visible under the saved/active filters, builds its star -
+  // a row the filters are hiding is left without one (and without
+  // my-cl-ready) so the first pass and idle chunks never spend time on
+  // UI nobody can see yet. applyCourseListFilters() finishes the job
+  // lazily the moment such a row actually becomes visible.
+  function setupCourseListRow(li) {
+    const alreadyParsed = !!li.dataset.myCourseId;
+
+    if (alreadyParsed) {
+      // Treat a row as not-ready (and rebuild it) if the site
+      // re-rendered it and wiped the star back out, even though the li
+      // itself kept its my-cl-ready class - this is what lets a row
+      // self-heal without needing the old dedicated per-row observer.
+      if (li.classList.contains("my-cl-ready") && li.querySelector(".my-cl-pin-star")) {
+        return false;
+      }
+    } else {
+      const card = li.querySelector("div.card");
+      if (!card) return false;
+
+      const link = card.querySelector("a[data-course-link]");
+      if (!link) return false;
+
+      const courseId = link.getAttribute("data-course-id");
+      if (!courseId) return false;
+
+      li.dataset.myCourseId = courseId;
+      li.dataset.myCourseName =
+        link.getAttribute("data-course-name") || link.textContent.trim();
+
+      const meta = parseCourseListMeta(li);
+      li.dataset.myCampus = meta.campus || "";
+      li.dataset.myLevel = meta.level || "";
+      li.dataset.myOther = meta.other ? "1" : "";
+    }
+
+    const { visible, isPinned } = computeCourseListRowVisibility(li);
+    li.classList.toggle("my-cl-pinned", isPinned);
+
+    if (!visible) {
+      li.classList.add("my-cl-hidden");
+      return true;
+    }
+
+    li.classList.remove("my-cl-hidden");
+
     const card = li.querySelector("div.card");
-    if (!card) return false;
-
-    const link = card.querySelector("a[data-course-link]");
-    if (!link) return false;
-
-    const courseId = link.getAttribute("data-course-id");
-    if (!courseId) return false;
-    const courseName = link.getAttribute("data-course-name") || link.textContent.trim();
-
-    li.dataset.myCourseId = courseId;
-
-    const meta = parseCourseListMeta(li);
-    li.dataset.myCampus = meta.campus || "";
-    li.dataset.myLevel = meta.level || "";
-    li.dataset.myOther = meta.other ? "1" : "";
+    if (!card) return true;
 
     // Sibling BEFORE the link, inside the card - never inside the
     // anchor itself, so clicking the star can never trigger a
     // navigation.
     if (!card.querySelector(".my-cl-pin-star")) {
-      card.insertBefore(buildCoursePinStar(courseId, courseName), card.firstChild);
+      card.insertBefore(
+        buildCoursePinStar(li.dataset.myCourseId, li.dataset.myCourseName),
+        card.firstChild
+      );
     }
 
     li.classList.add("my-cl-ready");
@@ -3356,6 +3594,11 @@
 
   function ensureCourseListToolsForRow(li) {
     if (li.querySelector(".my-cl-tools")) return;
+
+    // Mirrors setupCourseListRow()'s star gating: a row our own filters
+    // are hiding gets its tools lazily, when applyCourseListFilters()
+    // reveals it, rather than up front alongside every visible row.
+    if (li.classList.contains("my-cl-hidden")) return;
 
     const courseId = li.dataset.myCourseId;
     if (!courseId) return;
@@ -3577,8 +3820,16 @@
 
   // The single source of truth for which rows are hidden by our own
   // filters (my-cl-hidden) and which are flagged pinned - re-run after
-  // every chip click, pin toggle, and idempotent-setup pass. Never
-  // touches any hiding the site's own search box has already applied.
+  // every chip click, pin toggle, and setup pass. Never touches any
+  // hiding the site's own search box has already applied.
+  //
+  // Rows the staged setup (see runCourseListStagedSetup) hasn't reached
+  // yet have no dataset.myCourseId and are skipped entirely here - this
+  // must stay cheap even for ~475 not-yet-processed rows on the very
+  // first call, so it never force-parses them (that's precisely the
+  // synchronous cost the chunking exists to avoid). Each row gets
+  // correctly classified the moment its own pass/chunk reaches it.
+  // Counts are therefore provisional until the final post-chunk call.
   function applyCourseListFilters() {
     if (!courseListState) return;
 
@@ -3591,39 +3842,35 @@
     let pinnedVisibleCount = 0;
 
     rows.forEach((li) => {
-      const courseId = li.dataset.myCourseId;
-      const isPinned = !!courseId && courseListState.pinned.has(courseId);
+      if (!li.dataset.myCourseId) return;
+
+      const { visible, isPinned } = computeCourseListRowVisibility(li);
       li.classList.toggle("my-cl-pinned", isPinned);
-
-      const isOther = li.dataset.myOther === "1";
-      const campus = li.dataset.myCampus || "";
-      const level = li.dataset.myLevel || "";
-
-      let visible;
-      if (isOther) {
-        visible = courseListState.other;
-      } else {
-        const campusOk =
-          courseListState.campuses.size === 0 ||
-          (!!campus && courseListState.campuses.has(campus));
-        const levelOk =
-          courseListState.levels.size === 0 ||
-          (!!level && courseListState.levels.has(level));
-        visible = campusOk && levelOk;
-      }
-
-      if (visible && courseListState.pinnedOnly && !isPinned) visible = false;
-
       li.classList.toggle("my-cl-hidden", !visible);
 
       if (visible) {
         visibleCount++;
         if (isPinned) pinnedVisibleCount++;
+
+        // A row the filters were hiding when its own setup pass reached
+        // it never got a star or tools built (see setupCourseListRow
+        // and ensureCourseListToolsForRow) - finish it lazily now that
+        // a filter change has revealed it.
+        if (!li.classList.contains("my-cl-ready")) {
+          setupCourseListRow(li);
+        }
+        ensureCourseListToolsForRow(li);
       }
     });
 
     updateCourseListHeadings(resultsRoot, pinnedVisibleCount, visibleCount - pinnedVisibleCount);
     updateCourseListCount(rows.length, visibleCount);
+
+    if (clTimingFirstFilterDone === null) {
+      clTimingFirstFilterDone = performance.now();
+      clMark("sbux-cl-first-filter");
+    }
+    logCourseListTimings();
   }
 
   // Replacing a text node (even with identical text) is still a
