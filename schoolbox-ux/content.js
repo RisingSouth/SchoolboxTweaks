@@ -32,6 +32,7 @@
     if (tweakToggles.classListPmiBadge) addPmiBadges();
     if (tweakToggles.classListAttentionTags) addStudentAttentionTags();
     if (tweakToggles.classListColumnReorg) reorganiseClassListColumns();
+    if (tweakToggles.classListStudentCount) updateClassListStudentCount();
     if (tweakToggles.dashboardRelief) addCheckForReliefButton();
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
@@ -1310,6 +1311,55 @@
         studentRow.style.display =
           !hideEmptyRows || allChecked || anyVisible ? "" : "none";
       });
+
+    // Pill/mode-switch clicks change row visibility via inline styles,
+    // not childList mutations, so the body-wide MutationObserver never
+    // sees them - this call is what keeps the count in sync with those
+    // clicks instead of waiting on the next unrelated DOM mutation.
+    if (tweakToggles.classListStudentCount) updateClassListStudentCount();
+  }
+
+  // Reuses addPastoralFlagFilter()'s own toolbar (.my-flag-filter-wrap)
+  // rather than adding a second container - this tweak is only
+  // meaningful alongside that filter bar, since it's the only thing on
+  // this page that ever hides a student row. Counts tbody rows the
+  // same way reorganiseClassListColumns() does (excluding ".sub-row",
+  // which isn't a student row), and only touches the DOM when the text
+  // actually changes, since applyTweaks() re-runs this on every
+  // mutation.
+  function updateClassListStudentCount() {
+    if (!isClassListPage()) return;
+
+    const modeRow = document.querySelector(".my-flag-filter-mode-row");
+    if (!modeRow) return;
+
+    const table = document.querySelector("#contact-table");
+    if (!table) return;
+
+    const studentRows = Array.from(table.querySelectorAll("tbody tr")).filter(
+      (row) => !row.classList.contains("sub-row")
+    );
+    const total = studentRows.length;
+    if (!total) return;
+
+    const visible = studentRows.filter(
+      (row) => window.getComputedStyle(row).display !== "none"
+    ).length;
+
+    const noun = total === 1 ? "student" : "students";
+    const text =
+      visible === total ? `${total} ${noun}` : `${visible} of ${total} ${noun}`;
+
+    let label = modeRow.querySelector(".my-flag-filter-student-count");
+    if (!label) {
+      label = document.createElement("span");
+      label.className = "my-flag-filter-student-count";
+      modeRow.appendChild(label);
+    }
+
+    if (label.textContent !== text) {
+      label.textContent = text;
+    }
   }
 
   // YM/HOY issues are logged as two separate flags - "Given" and

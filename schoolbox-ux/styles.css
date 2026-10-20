@@ -448,6 +448,10 @@ td[data-pop-out-menu="true"]:hover .my-mb-quicklink--cell,
   margin-left: 6px;
 }
 
+.my-flag-filter-student-count {
+  margin-left: auto;
+}
+
 .my-flag-filter-mode-button {
   padding: 4px 10px;
   font-size: 0.95em;

@@ -109,6 +109,11 @@ const TWEAK_GROUPS = [
         label: "Column reorganisation",
         description: "Hides blank columns, relocates flag pills",
       },
+      {
+        id: "classListStudentCount",
+        label: "Student count",
+        description: "Shows how many students are visible in the pastoral flag filter bar",
+      },
     ],
   },
   {
