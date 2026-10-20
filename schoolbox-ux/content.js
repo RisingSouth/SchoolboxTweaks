@@ -3235,8 +3235,6 @@
       card.insertBefore(buildCoursePinStar(courseId, courseName), card.firstChild);
     }
 
-    addCourseListUnitsPill(li, courseId);
-
     li.classList.add("my-cl-ready");
     return true;
   }
@@ -3309,18 +3307,19 @@
     const findLink = (prefix) =>
       dropdown.querySelector(`a[data-test^="${prefix}"]`);
 
-    const addToolLink = (source, label) => {
+    const addToolLink = (source, label, tool) => {
       if (!source) return;
       const a = document.createElement("a");
       a.href = source.getAttribute("href");
       a.textContent = label;
       a.className = "my-cl-tool-btn";
+      if (tool) a.dataset.myClTool = tool;
       tools.appendChild(a);
     };
 
     addToolLink(findLink("course-list-planner-"), "Unit Planner");
     addToolLink(findLink("course-list-markbook-"), "Course Markbook");
-    addToolLink(findLink("course-list-calendar-"), "Assessment Calendar");
+    addToolLink(findLink("course-list-calendar-"), "Assessment Calendar", "calendar");
     addToolLink(findLink("course-list-homepage-"), "Homepage");
 
     return tools.childElementCount ? tools : null;
@@ -3405,59 +3404,6 @@
     }
 
     scheduleCourseListIdleWork(step);
-  }
-
-  // Adds the "N units ▾" pill next to a row's existing expand arrow,
-  // and (once per course) a small "Units:" label in front of its unit
-  // list - the unit pills themselves are styled in styles.css.
-  function addCourseListUnitsPill(li, courseId) {
-    const collapser = li.querySelector(`[data-collapser="course-${courseId}"]`);
-    if (!collapser) return;
-
-    const panel = li.querySelector(`[data-collapsable="course-${courseId}"]`);
-    const unitLinks = panel
-      ? panel.querySelectorAll("a.course-unit-link--meta")
-      : [];
-    const count = unitLinks.length;
-    if (!count) return;
-
-    const labelFor = (collapsed) =>
-      `${count} unit${count === 1 ? "" : "s"} ${collapsed ? "▾" : "▴"}`;
-
-    const pill = document.createElement("button");
-    pill.type = "button";
-    pill.className = "my-cl-units-pill";
-    pill.setAttribute("aria-label", `Toggle ${count} units`);
-    pill.textContent = labelFor(
-      !panel || panel.getAttribute("data-collapse-state") === "collapsed"
-    );
-
-    pill.addEventListener("click", (event) => {
-      event.preventDefault();
-      collapser.click();
-      // The site's own handler updates data-collapse-state through its
-      // framework's own render cycle rather than synchronously inline
-      // with the click - a microtask is enough to land after that in
-      // every case seen so far, without resorting to a fixed delay.
-      Promise.resolve().then(() => {
-        const collapsed =
-          !panel || panel.getAttribute("data-collapse-state") === "collapsed";
-        pill.textContent = labelFor(collapsed);
-      });
-    });
-
-    collapser.insertAdjacentElement("afterend", pill);
-    li.classList.add("my-cl-has-pill");
-
-    if (panel && !panel.querySelector(".my-cl-units-label")) {
-      const unitList = panel.querySelector("ul.unit-list");
-      if (unitList) {
-        const unitsLabel = document.createElement("div");
-        unitsLabel.className = "my-cl-units-label";
-        unitsLabel.textContent = "Units:";
-        unitList.insertAdjacentElement("beforebegin", unitsLabel);
-      }
-    }
   }
 
   // Built once, the first time there's at least one row to derive the
