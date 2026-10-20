@@ -966,12 +966,6 @@ body.my-tweak-course-list #course-selector-results ul.information-list {
 
 body.my-tweak-course-list #course-selector-results li[data-course-row] {
   order: 1;
-  /* Skips layout/paint for off-screen rows - safe because the site's
-     own ⋮ menu panel gets moved to <body> by Foundation once it's
-     initialised (see buildCourseListTools() in content.js), so it's
-     never actually a descendant of this row for containment to clip. */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 62px;
 }
 
 body.my-tweak-course-list #course-selector-results li[data-course-row].my-cl-pinned {
