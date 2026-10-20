@@ -1030,6 +1030,19 @@ body.my-tweak-course-list #course-selector-results li[data-course-row] div.card 
   grid-template-rows: auto auto;
   align-items: center;
   column-gap: 10px;
+  /* Safety net so hover can never change the row's height: tools used
+     to be inserted into column 3 lazily on first hover, which changed
+     that column's "auto" width from 0 to its content width within
+     this row's own grid and could reflow the title/meta text. Tools
+     now exist for every row from load (see buildCourseListToolsInChunks
+     in content.js) so this shouldn't trigger any more, but the
+     min-height stays as a belt-and-suspenders guard against any other
+     hover-driven reflow (ours or the site's own :hover rules).
+     Estimated from the row's known fixed-height pieces (the 28px pin
+     star/tools column spanning both rows, 1fr title line + meta line) -
+     not measured against a live Schoolbox page, so nudge this if the
+     real resting height differs. */
+  min-height: 56px;
 }
 
 body.my-tweak-course-list #course-selector-results li[data-course-row] div.card > a[data-course-link] {
@@ -1077,22 +1090,31 @@ body.my-tweak-course-list .my-cl-pin-star--active {
 body.my-tweak-course-list .my-cl-tools {
   grid-column: 3;
   grid-row: 1 / 3;
+  /* Pinned to the star's own height and centered independently of
+     div.card's align-items, so this element can never be the thing
+     that stretches or shrinks the row on hover. */
+  align-self: center;
+  height: 28px;
   display: flex;
   flex-wrap: nowrap;
   gap: 2px;
   justify-content: flex-end;
   align-items: center;
   visibility: hidden;
+  opacity: 0;
+  transition: opacity 120ms ease-in-out;
 }
 
 body.my-tweak-course-list #course-selector-results li[data-course-row]:hover .my-cl-tools,
 body.my-tweak-course-list #course-selector-results li[data-course-row]:focus-within .my-cl-tools {
   visibility: visible;
+  opacity: 1;
 }
 
 @media (hover: none) {
   body.my-tweak-course-list .my-cl-tools {
     visibility: visible;
+    opacity: 1;
   }
 }
 

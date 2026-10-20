@@ -3033,6 +3033,7 @@
   let courseListSearchFocusAttempted = false;
   let courseListCountTextEl = null;
   let courseListRunning = false;
+  let courseListToolsBuildScheduled = false;
 
   function loadCourseListState(onReady) {
     if (courseListState) {
@@ -3325,24 +3326,24 @@
     return tools.childElementCount ? tools : null;
   }
 
-  // Building all ~515 rows' quick-action tools up front is the single
-  // most expensive part of the page - most of those rows are never
-  // looked at in a given visit. So instead, each row's tools are built
-  // the first time the mouse or keyboard focus actually reaches it, via
-  // one pair of listeners delegated on the list rather than one pair
-  // per row. Devices with no hover (touch) would otherwise never build
-  // any tools at all, so those fall back to building every row's tools
-  // up front, just spread across animation frames so it doesn't block
-  // the thread in one go.
+  // Building all ~515 rows' quick-action tools used to happen the
+  // first time the mouse or keyboard focus actually reached a row, but
+  // that made the tools visibly pop in 1-2s after the pointer arrived -
+  // each build inserted a new node into that row's own div.card grid,
+  // which is a DOM mutation, which woke the body-wide MutationObserver
+  // (applyTweaks() -> initCourseListPage()), which re-queried all ~515
+  // rows again before the guard at the top of initCourseListPage()
+  // could bail out. So instead, every row's tools are built once, up
+  // front, spread across idle time in small chunks so it never blocks
+  // the thread - by the time a hover or focus event actually reaches a
+  // row, its tools already exist and hover only has to flip a CSS
+  // visibility/opacity rule. The delegated listeners stay as a
+  // fallback for the rare row the idle-time pass hasn't reached yet
+  // (e.g. a hover landing within the first idle slice or two).
   function ensureCourseListToolsDelegation(resultsRoot) {
     const list = resultsRoot.querySelector("ul.information-list");
     if (!list || list.dataset.myClToolsWired) return;
     list.dataset.myClToolsWired = "1";
-
-    if (window.matchMedia && window.matchMedia("(hover: none)").matches) {
-      buildCourseListToolsInChunks(list);
-      return;
-    }
 
     const handler = (event) => {
       const li = event.target.closest("li[data-course-row]");
@@ -3350,6 +3351,8 @@
     };
     list.addEventListener("mouseover", handler);
     list.addEventListener("focusin", handler);
+
+    scheduleCourseListToolsBuild(list);
   }
 
   function ensureCourseListToolsForRow(li) {
@@ -3370,19 +3373,38 @@
     }
   }
 
+  // Only ever starts the background pass once per page load - the
+  // body-wide MutationObserver will call ensureCourseListToolsDelegation()
+  // again on every later mutation, but the `myClToolsWired` guard above
+  // already stops it from getting back in here, so this flag is really
+  // just documenting that intent for the one call site that matters.
+  function scheduleCourseListToolsBuild(list) {
+    if (courseListToolsBuildScheduled) return;
+    courseListToolsBuildScheduled = true;
+    buildCourseListToolsInChunks(list);
+  }
+
+  function scheduleCourseListIdleWork(fn) {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(fn);
+    } else {
+      setTimeout(fn, 0);
+    }
+  }
+
   function buildCourseListToolsInChunks(list) {
     const rows = Array.from(list.querySelectorAll("li[data-course-row]"));
     let index = 0;
 
     function step() {
-      const end = Math.min(index + 50, rows.length);
+      const end = Math.min(index + 25, rows.length);
       for (; index < end; index++) {
         ensureCourseListToolsForRow(rows[index]);
       }
-      if (index < rows.length) requestAnimationFrame(step);
+      if (index < rows.length) scheduleCourseListIdleWork(step);
     }
 
-    requestAnimationFrame(step);
+    scheduleCourseListIdleWork(step);
   }
 
   // Adds the "N units ▾" pill next to a row's existing expand arrow,
