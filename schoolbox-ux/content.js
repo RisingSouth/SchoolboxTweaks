@@ -37,6 +37,7 @@
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
     if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
     if (tweakToggles.pastoralRecordHistoryPanel) addPastoralRecordHistoryPanel();
+    if (tweakToggles.pastoralPmiStepback) addPmiStepbackHelper();
 
     if (tweakToggles.courseListImprovements) initCourseListPage();
 
@@ -235,7 +236,7 @@
 
       const footer = document.createElement("div");
       footer.className = "my-nav-panel-footer";
-      footer.textContent = "v1.2.4";
+      footer.textContent = "v1.2.5";
       panel.appendChild(footer);
 
       document.body.appendChild(panel);
@@ -2528,6 +2529,443 @@
     document.body.appendChild(panel);
 
     if (pastoralPanelAlwaysOpen) openPanel();
+  }
+
+  // ---------------------------------------------------------------
+  // Pastoral record insert page: PMI removed stepback helper
+  //
+  // Year Managers record a separate "PMI removed" pastoral entry for
+  // every level a student steps down (9 -> 4 needs 5 records: Down to
+  // PMI 8, 7, 6, 5, 4). This prefills Type/Sub-type/Title for each
+  // step in turn so the human only has to press Save - it never
+  // submits the form itself.
+  //
+  // The sequence (which student, which level is next, where it ends)
+  // lives in chrome.storage.local under "pmiSeq" - student id and a
+  // level counter only, never note text/visibility/related students.
+  // It's cleared if it belongs to a different student or is older
+  // than 30 minutes (see PMI_SEQ_MAX_AGE_MS), so a half-finished
+  // sequence can never silently reappear on the wrong student or days
+  // later.
+  //
+  // "submitted" is set true by the add page's own submit listener and
+  // only ever consumed on the student's profile page - landing there
+  // is what actually advances the counter, so a failed save that
+  // leaves the user on the add page never advances anything.
+  //
+  // NOT independently confirmed against a real page (see the report
+  // this was built against for the full list):
+  //  - whether #subtypeId's options are populated synchronously or
+  //    via an AJAX round-trip once #typeId changes (hence the polling
+  //    in selectPmiSubtypeByLabel() rather than a single synchronous
+  //    check)
+  //  - whether a native, isolated-world dispatchEvent("change") is
+  //    actually seen by Schoolbox's own jQuery `.on('change', ...)`
+  //    handler on #typeId/#subtypeId (reasoned likely from
+  //    main-world-bridge.js's note that the DOM itself is shared
+  //    across worlds, but not tested live)
+  //  - whether a failed client-side validation on the add page still
+  //    fires the form's "submit" event - if it does, `submitted`
+  //    could end up true without a real save. There's no clearly
+  //    separate "this is the real Save path" hook to key off instead,
+  //    so this isn't mitigated - a failed-validation-then-navigate-to-
+  //    profile sequence could advance the counter without a save
+  //    having happened.
+  // ---------------------------------------------------------------
+
+  const PMI_SEQ_STORAGE_KEY = "pmiSeq";
+  const PMI_SEQ_MAX_AGE_MS = 30 * 60 * 1000;
+  const PMI_TYPE_VALUE = "16"; // YM/HOY
+  const PMI_SUBTYPE_LABEL = "Personal Management Issue Removed";
+  const PMI_SUBTYPE_POLL_TIMEOUT_MS = 5000;
+
+  function isPastoralStudentProfilePage() {
+    return /^\/pastoral\/student\/\d+\/?$/.test(window.location.pathname);
+  }
+
+  function getPastoralProfileStudentIdFromUrl() {
+    const match = window.location.pathname.match(
+      /^\/pastoral\/student\/(\d+)\/?$/
+    );
+    return match ? match[1] : null;
+  }
+
+  // Reads "pmiSeq" and hands back null (clearing storage) if it's
+  // missing, belongs to a different student, or has aged past
+  // PMI_SEQ_MAX_AGE_MS - every reader of the sequence goes through
+  // this so neither the add page nor the profile page can act on a
+  // stale or mismatched one.
+  function getActivePmiSequenceForStudent(studentId, callback) {
+    chrome.storage.local.get({ [PMI_SEQ_STORAGE_KEY]: null }, (result) => {
+      const seq = result[PMI_SEQ_STORAGE_KEY];
+      if (!seq) {
+        callback(null);
+        return;
+      }
+
+      const expired = Date.now() - seq.ts > PMI_SEQ_MAX_AGE_MS;
+      const mismatched = String(seq.studentId) !== String(studentId);
+      if (expired || mismatched) {
+        chrome.storage.local.remove(PMI_SEQ_STORAGE_KEY);
+        callback(null);
+        return;
+      }
+
+      callback(seq);
+    });
+  }
+
+  function savePmiSequence(seq) {
+    chrome.storage.local.set({ [PMI_SEQ_STORAGE_KEY]: seq });
+  }
+
+  function clearPmiSequence() {
+    chrome.storage.local.remove(PMI_SEQ_STORAGE_KEY);
+  }
+
+  // this.total - (this.next - this.end) - counts how many steps have
+  // already passed between the sequence's start and its current
+  // "next" level, in both this file's displays (bar on the add page
+  // and banner on the profile page), kept as one function so the two
+  // can never drift apart.
+  function pmiStepNumber(seq) {
+    return seq.total - (seq.next - seq.end);
+  }
+
+  function findOptionByLabel(select, label) {
+    return Array.from(select.options).find(
+      (option) => option.textContent.trim() === label
+    );
+  }
+
+  // #typeId's options are confirmed already present in the page's own
+  // HTML (unlike #subtypeId, below), so this is a plain synchronous
+  // lookup - no polling needed.
+  function selectPmiType(typeSelect) {
+    const option = Array.from(typeSelect.options).find(
+      (o) => o.value === PMI_TYPE_VALUE
+    );
+    if (!option) return false;
+
+    typeSelect.value = PMI_TYPE_VALUE;
+    typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }
+
+  // #subtypeId is saved EMPTY in the page's own HTML - Schoolbox's own
+  // chained.js (window.sbx.chained) fills it in once #typeId changes,
+  // and whether that happens synchronously or via an AJAX round-trip
+  // isn't confirmed, so this polls (via a MutationObserver on the
+  // select itself, not a timer loop) for an option matching the label
+  // rather than assuming either timing. Matches by label text, not
+  // value, since the value isn't confirmed either.
+  function selectPmiSubtypeByLabel(subtypeSelect, label, timeoutMs, onDone) {
+    const existing = findOptionByLabel(subtypeSelect, label);
+    if (existing) {
+      subtypeSelect.value = existing.value;
+      subtypeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      onDone(true);
+      return;
+    }
+
+    let settled = false;
+    const observer = new MutationObserver(() => {
+      const option = findOptionByLabel(subtypeSelect, label);
+      if (!option) return;
+
+      settled = true;
+      observer.disconnect();
+      clearTimeout(timer);
+      subtypeSelect.value = option.value;
+      subtypeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      onDone(true);
+    });
+    observer.observe(subtypeSelect, { childList: true });
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      observer.disconnect();
+      console.log(
+        "[my-pmi-stepback] timed out waiting for subtype option",
+        label
+      );
+      onDone(false);
+    }, timeoutMs);
+  }
+
+  // Sets Type, then Sub-type, then the Title for one step - Occurred
+  // On and everything else on the form is left exactly as Schoolbox
+  // set it. Never touches the form's submit button or calls
+  // form.submit() - onDone(false) just means the bar should tell the
+  // human to finish filling it in manually.
+  function prefillPmiStep(level, onDone) {
+    const typeSelect = document.querySelector("#typeId");
+    const subtypeSelect = document.querySelector("#subtypeId");
+    const headingInput = document.querySelector("#heading");
+    if (!typeSelect || !subtypeSelect || !headingInput) {
+      onDone(false);
+      return;
+    }
+
+    if (!selectPmiType(typeSelect)) {
+      onDone(false);
+      return;
+    }
+
+    selectPmiSubtypeByLabel(
+      subtypeSelect,
+      PMI_SUBTYPE_LABEL,
+      PMI_SUBTYPE_POLL_TIMEOUT_MS,
+      (subtypeOk) => {
+        if (!subtypeOk) {
+          onDone(false);
+          return;
+        }
+        headingInput.value = "Stepbacks Completed - Down to PMI " + level;
+        onDone(true);
+      }
+    );
+  }
+
+  // Marks the active sequence (if any) as submitted the moment the
+  // form's own submit event fires - NOT the moment a save actually
+  // succeeds, since there's no separate confirmation hook to key off
+  // (see the NOT-confirmed note above this section for the one way
+  // that can go wrong). Bound once per page load via the dataset flag
+  // below; harmless to call on a page with no active sequence at all,
+  // since getActivePmiSequenceForStudent() just no-ops.
+  function bindPmiSubmitListener(studentId) {
+    const form = document.querySelector("#pastoralForm");
+    if (!form || form.dataset.myPmiSubmitBound) return;
+    form.dataset.myPmiSubmitBound = "true";
+
+    form.addEventListener("submit", () => {
+      getActivePmiSequenceForStudent(studentId, (seq) => {
+        if (!seq) return;
+        seq.submitted = true;
+        seq.ts = Date.now();
+        savePmiSequence(seq);
+      });
+    });
+  }
+
+  // The "PMI stepback X of N - Down to PMI {level}" bar shown once a
+  // sequence is active, whether it was just started or was already
+  // running when this page loaded. Runs the Type/Sub-type/Title
+  // prefill itself; on a timeout, the bar's text is replaced with a
+  // manual-fallback message rather than leaving the stale "step X of
+  // N" line looking like it actually worked.
+  function buildPmiActiveBar(fieldset, studentId, seq) {
+    const bar = document.createElement("div");
+    bar.className = "my-tweak-pmi-bar my-tweak-pmi-bar--active";
+
+    const progressText = document.createElement("span");
+    progressText.className = "my-tweak-pmi-progress";
+    progressText.textContent =
+      "PMI stepback " +
+      pmiStepNumber(seq) +
+      " of " +
+      seq.total +
+      " - Down to PMI " +
+      seq.next;
+    bar.appendChild(progressText);
+
+    const cancelLink = document.createElement("a");
+    cancelLink.href = "#";
+    cancelLink.className = "my-tweak-pmi-cancel";
+    cancelLink.textContent = "Cancel";
+    cancelLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      clearPmiSequence();
+      bar.remove();
+      buildPmiStartBar(fieldset, studentId);
+    });
+    bar.appendChild(cancelLink);
+
+    fieldset.parentNode.insertBefore(bar, fieldset);
+
+    prefillPmiStep(seq.next, (ok) => {
+      if (!ok) {
+        progressText.textContent =
+          "Couldn't set Type/Sub-type - fill manually";
+      }
+    });
+
+    return bar;
+  }
+
+  // The "PMI removed: from PMI [n] to PMI [n]  [Start]" bar shown
+  // when no sequence is active yet for this student. Validation is
+  // just "both whole numbers, from > to" - Start both stores the new
+  // sequence and immediately swaps this bar for buildPmiActiveBar()'s
+  // one, which runs the actual prefill for step 1.
+  function buildPmiStartBar(fieldset, studentId) {
+    const bar = document.createElement("div");
+    bar.className = "my-tweak-pmi-bar";
+
+    const fromLabel = document.createElement("span");
+    fromLabel.textContent = "PMI removed: from PMI";
+
+    const fromInput = document.createElement("input");
+    fromInput.type = "number";
+    fromInput.className = "my-tweak-pmi-input";
+
+    const toLabel = document.createElement("span");
+    toLabel.textContent = "to PMI";
+
+    const toInput = document.createElement("input");
+    toInput.type = "number";
+    toInput.className = "my-tweak-pmi-input";
+
+    const startButton = document.createElement("button");
+    startButton.type = "button";
+    startButton.className = "my-tweak-pmi-start";
+    startButton.textContent = "Start";
+
+    const error = document.createElement("span");
+    error.className = "my-tweak-pmi-error";
+
+    startButton.addEventListener("click", () => {
+      const from = parseInt(fromInput.value, 10);
+      const to = parseInt(toInput.value, 10);
+
+      const validInts =
+        String(from) === fromInput.value.trim() &&
+        String(to) === toInput.value.trim();
+      if (!validInts || from <= to) {
+        error.textContent =
+          'Enter whole numbers, with "from" greater than "to".';
+        return;
+      }
+
+      const seq = {
+        studentId: String(studentId),
+        next: from - 1,
+        end: to,
+        total: from - to,
+        submitted: false,
+        ts: Date.now(),
+      };
+      savePmiSequence(seq);
+
+      bar.remove();
+      buildPmiActiveBar(fieldset, studentId, seq);
+    });
+
+    bar.appendChild(fromLabel);
+    bar.appendChild(fromInput);
+    bar.appendChild(toLabel);
+    bar.appendChild(toInput);
+    bar.appendChild(startButton);
+    bar.appendChild(error);
+
+    fieldset.parentNode.insertBefore(bar, fieldset);
+  }
+
+  // Guards the async chrome.storage.local.get() lookup below the same
+  // way flagFilterBuilding guards addPastoralFlagFilter() - without
+  // it, the body-wide MutationObserver could call this again while
+  // the first lookup is still in flight and end up building two bars.
+  let pmiBarBuilding = false;
+
+  function addPmiStepbackOnInsertPage(studentId) {
+    bindPmiSubmitListener(studentId);
+
+    if (document.querySelector(".my-tweak-pmi-bar")) return;
+    if (pmiBarBuilding) return;
+
+    const headingInput = document.querySelector("#heading");
+    const fieldset = headingInput ? headingInput.closest("fieldset") : null;
+    if (!fieldset || !fieldset.parentNode) return;
+
+    pmiBarBuilding = true;
+    getActivePmiSequenceForStudent(studentId, (seq) => {
+      pmiBarBuilding = false;
+      if (document.querySelector(".my-tweak-pmi-bar")) return;
+
+      if (seq) {
+        buildPmiActiveBar(fieldset, studentId, seq);
+      } else {
+        buildPmiStartBar(fieldset, studentId);
+      }
+    });
+  }
+
+  // On the student profile page, an active sequence only ever
+  // advances here - never on the add page itself - and only once per
+  // page load (pmiProfileHandled), so repeatedly re-running
+  // applyTweaks() as the page mutates can't double-decrement it.
+  let pmiProfileHandled = false;
+
+  function renderPmiBanner(studentId, seq) {
+    if (document.querySelector(".my-tweak-pmi-banner")) return;
+
+    const banner = document.createElement("div");
+    banner.className = "my-tweak-pmi-banner";
+
+    const text = document.createElement("span");
+    text.textContent =
+      "PMI stepback " +
+      pmiStepNumber(seq) +
+      " of " +
+      seq.total +
+      " - Next: Down to PMI " +
+      seq.next;
+    banner.appendChild(text);
+
+    const addLink = document.createElement("a");
+    addLink.href = "/pastoral/student/" + studentId + "/record/insert";
+    addLink.className = "my-tweak-pmi-banner-add";
+    addLink.textContent = "Add next record";
+    banner.appendChild(addLink);
+
+    const cancelLink = document.createElement("a");
+    cancelLink.href = "#";
+    cancelLink.className = "my-tweak-pmi-banner-cancel";
+    cancelLink.textContent = "Cancel";
+    cancelLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      clearPmiSequence();
+      banner.remove();
+    });
+    banner.appendChild(cancelLink);
+
+    const content = document.querySelector("#content") || document.body;
+    content.insertBefore(banner, content.firstChild);
+  }
+
+  function addPmiStepbackOnProfilePage(studentId) {
+    if (document.querySelector(".my-tweak-pmi-banner")) return;
+    if (pmiProfileHandled) return;
+    pmiProfileHandled = true;
+
+    getActivePmiSequenceForStudent(studentId, (seq) => {
+      if (!seq) return;
+
+      if (seq.submitted) {
+        seq.next -= 1;
+        seq.submitted = false;
+        seq.ts = Date.now();
+
+        if (seq.next < seq.end) {
+          clearPmiSequence();
+          return;
+        }
+        savePmiSequence(seq);
+      }
+
+      renderPmiBanner(studentId, seq);
+    });
+  }
+
+  function addPmiStepbackHelper() {
+    if (isPastoralRecordInsertPage()) {
+      const studentId = getPastoralStudentIdFromUrl();
+      if (studentId) addPmiStepbackOnInsertPage(studentId);
+    } else if (isPastoralStudentProfilePage()) {
+      const studentId = getPastoralProfileStudentIdFromUrl();
+      if (studentId) addPmiStepbackOnProfilePage(studentId);
+    }
   }
 
   // ---------------------------------------------------------------

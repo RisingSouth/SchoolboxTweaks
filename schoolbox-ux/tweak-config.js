@@ -144,6 +144,11 @@ const TWEAK_GROUPS = [
         label: "Record history panel",
         description: "Shows a student's past pastoral records beside the new-record form",
       },
+      {
+        id: "pastoralPmiStepback",
+        label: "PMI removed sequence",
+        description: "Prefills each step of a multi-level \"PMI removed\" sequence - you still press Save",
+      },
     ],
   },
 ];

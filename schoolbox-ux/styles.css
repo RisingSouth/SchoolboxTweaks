@@ -900,6 +900,108 @@ body.my-pastoral-panel-open #content {
   margin: 0;
 }
 
+/*
+  PMI removed stepback helper - the "from/to [Start]" and "step X of
+  N" bar on the add-record page, and the "Next: Down to PMI..."
+  banner on the student profile page. All scoped under these
+  my-tweak-pmi-* classes so nothing here applies if the tweak toggle
+  is off (the toggle only ever skips adding these classes in the
+  first place - there's no body-level class to gate on here the way
+  markbookFullHeight/courseListImprovements do).
+*/
+.my-tweak-pmi-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 0 12px 0;
+  border: 1px solid rgb(30, 105, 128);
+  border-radius: 4px;
+  background: rgba(30, 105, 128, 0.06);
+  font-size: 0.9em;
+}
+
+.my-tweak-pmi-bar--active {
+  background: rgba(122, 163, 74, 0.1);
+  border-color: rgb(122, 163, 74);
+}
+
+.my-tweak-pmi-input {
+  width: 56px;
+  padding: 2px 6px;
+}
+
+.my-tweak-pmi-start {
+  padding: 4px 12px;
+  border: 1px solid rgb(30, 105, 128);
+  border-radius: 4px;
+  background: rgb(30, 105, 128);
+  color: white;
+  cursor: pointer;
+}
+
+.my-tweak-pmi-start:hover {
+  background: rgb(22, 80, 98);
+}
+
+.my-tweak-pmi-progress {
+  font-weight: 600;
+}
+
+.my-tweak-pmi-error {
+  color: rgb(178, 58, 58);
+}
+
+.my-tweak-pmi-cancel {
+  color: rgb(102, 102, 102);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.my-tweak-pmi-cancel:hover {
+  color: rgb(30, 105, 128);
+}
+
+.my-tweak-pmi-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 14px;
+  margin: 0 0 16px 0;
+  border: 1px solid rgb(122, 163, 74);
+  border-radius: 4px;
+  background: rgba(122, 163, 74, 0.1);
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.my-tweak-pmi-banner-add {
+  padding: 4px 12px;
+  border: 1px solid rgb(30, 105, 128);
+  border-radius: 4px;
+  background: rgb(30, 105, 128);
+  color: white;
+  font-weight: normal;
+  text-decoration: none;
+}
+
+.my-tweak-pmi-banner-add:hover {
+  background: rgb(22, 80, 98);
+}
+
+.my-tweak-pmi-banner-cancel {
+  color: rgb(102, 102, 102);
+  font-weight: normal;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.my-tweak-pmi-banner-cancel:hover {
+  color: rgb(30, 105, 128);
+}
+
 /* ---------------------------------------------------------------
    Course List page (/course/list)
 
