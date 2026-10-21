@@ -600,51 +600,6 @@ td[data-pop-out-menu="true"]:hover .my-mb-quicklink--cell,
   color: rgb(71, 71, 71);
 }
 
-.my-relief-check-button {
-  display: inline-block;
-  margin-left: 10px;
-  font-size: 12px;
-  padding: 3px 10px;
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  vertical-align: middle;
-}
-
-.my-relief-check-button:hover {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.my-relief-check-button:disabled {
-  cursor: default;
-  opacity: 0.7;
-}
-
-.my-relief-check-button.my-relief-checked {
-  border-color: rgba(0, 0, 0, 0.12);
-  color: rgb(71, 71, 71);
-}
-
-/* Same alert red the site already uses for its own "Medical Alert"
-   styling elsewhere, so this reads as a serious/urgent marker rather
-   than an arbitrary colour this extension invented. */
-.my-relief-cover {
-  border: 2px solid var(--color-alert, #ea0a06) !important;
-  box-sizing: border-box;
-}
-
-.my-relief-cover-banner {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-alert, #ea0a06);
-  background: rgba(234, 10, 6, 0.08);
-  padding: 2px 4px;
-  margin-bottom: 4px;
-  border-radius: 2px;
-}
-
 /*
   "My duties" section inside the nav dropdown panel - same
   collapsible-folder pattern already used for "Other apps".
@@ -781,9 +736,8 @@ td[data-pop-out-menu="true"]:hover .my-mb-quicklink--cell,
 }
 
 /*
-  Duty banner on an existing session column - teal (the extension's
-  own accent colour) rather than the relief-cover red, so a duty
-  marker never reads as a "you're covering this" alert.
+  Duty banner on an existing session column - teal, the extension's
+  own accent colour, so it doesn't read as an urgent alert.
 */
 .my-duty-banner {
   font-size: 10px;

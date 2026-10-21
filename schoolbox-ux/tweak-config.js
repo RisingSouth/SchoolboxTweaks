@@ -15,11 +15,6 @@ const TWEAK_GROUPS = [
         description: "Adds numeric-ID links to each timetable box",
       },
       {
-        id: "dashboardRelief",
-        label: "Check for relief",
-        description: "Marks cover periods from the daily bulletin",
-      },
-      {
         id: "dashboardDuties",
         label: "My duties",
         description: "Shows recurring duties on the timetable",

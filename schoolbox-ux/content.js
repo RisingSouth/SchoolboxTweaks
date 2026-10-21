@@ -33,7 +33,6 @@
     if (tweakToggles.classListAttentionTags) addStudentAttentionTags();
     if (tweakToggles.classListColumnReorg) reorganiseClassListColumns();
     if (tweakToggles.classListStudentCount) updateClassListStudentCount();
-    if (tweakToggles.dashboardRelief) addCheckForReliefButton();
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
     if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
@@ -687,8 +686,7 @@
   // <a title="{description}" href="/send.php?id={id}"> per file. So
   // finding "the current Seat layout for this class" is just: fetch
   // that class's Manage Files page, parse it, find the link whose
-  // title matches, read the id out of its href. Same fetch-a-page-
-  // and-parse-it technique already used for the bulletin PDF.
+  // title matches, read the id out of its href.
   //
   // Delete shape and the real hide mechanism (a separate PATCH to the
   // file's own visibilityUrl with a JSON body, confirmed the create
@@ -749,10 +747,9 @@
       });
   }
 
-  // /send.php?id=X redirects to a signed, CORS-less R2 URL - the
-  // same wall the bulletin PDF fetch hit (see background.js) - so
-  // this has to go through the background worker rather than a
-  // direct content-script fetch().
+  // /send.php?id=X redirects to a signed, CORS-less R2 URL (see
+  // background.js) - so this has to go through the background
+  // worker rather than a direct content-script fetch().
   function loadSeatLayout(classId) {
     return findSeatLayoutFile(classId).then((fileId) => {
       if (!fileId) {
@@ -1660,33 +1657,17 @@
   }
 
   // ---------------------------------------------------------------
-  // Dashboard: "Check for relief" button
+  // Dashboard timetable: shared period-code/start-time lookup
   //
-  // Reads the day's daily bulletin PDF (posted to the news feed most
-  // mornings, sometimes reissued later the same day) and looks for
-  // cover assignments made to the current user, then marks the
-  // matching period(s) on the dashboard's own timetable table.
-  //
-  // Deliberately manual rather than automatic - no auto-fetch, no
-  // polling, no staleness-detection against reissued bulletins (the
-  // dashboard's own <time> timestamp doesn't move when a post is
-  // edited in place, so there's no reliable signal to auto-detect a
-  // reissue). Click again any time to re-check.
-  //
-  // v1 only covers ONE direction: classes the current user has been
-  // assigned to cover. It does not yet detect the reverse case (the
-  // user's own class being covered by someone else) - that lives in
-  // a different, far less structured part of the bulletin (a
-  // multi-name table rather than the clean repeated per-person
-  // blocks this relies on) and needs a confirmed real example before
-  // it's worth attempting.
+  // Used to find which timetable column a given period code (e.g.
+  // "1H") corresponds to - currently only by the "My duties" feature
+  // below. Only covers periods that actually appear as timetable
+  // columns (teaching sessions + homeroom). Duty slots like
+  // BSH/RH/LH/ASH/AS2H never have a matching column, so they're
+  // intentionally left out here - there's nothing on the dashboard
+  // timetable to mark.
   // ---------------------------------------------------------------
-
-  // Only covers periods that actually appear as timetable columns
-  // (teaching sessions + homeroom). Duty slots like BSH/RH/LH/ASH/
-  // AS2H never have a matching column, so they're intentionally left
-  // out here - there's nothing on the dashboard timetable to mark.
-  const RELIEF_PERIOD_START_TIMES = {
+  const PERIOD_START_TIMES = {
     HH: "8:30am",
     "1H": "8:45am",
     "2H": "9:45am",
@@ -1695,303 +1676,6 @@
     "5H": "1:30pm",
     "6H": "2:30pm",
   };
-
-  let pdfjsLibPromise = null;
-
-  // Dynamic import() of a web_accessible_resources URL is supported
-  // in content scripts. Loaded lazily - most dashboard visits never
-  // click the button, so there's no reason to pull in an 860KB+2.2MB
-  // library until it's actually needed.
-  function loadPdfJsLib() {
-    if (!pdfjsLibPromise) {
-      pdfjsLibPromise = import(
-        chrome.runtime.getURL("vendor/pdfjs/pdf.mjs")
-      ).then((lib) => {
-        lib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL(
-          "vendor/pdfjs/pdf.worker.mjs"
-        );
-        return lib;
-      });
-    }
-    return pdfjsLibPromise;
-  }
-
-  // The dashboard news feed lists "Daily bulletin ..." as an ordinary
-  // post, most recent first. Rather than trying to parse the date out
-  // of the title text, this just takes the first (topmost) match -
-  // reliable as long as there's only ever one bulletin post visible
-  // near the top of the feed at a time, which matches what's been
-  // observed so far.
-  //
-  // Deliberately NOT anchored to the start of the title: when a
-  // bulletin is reissued the same day, Schoolbox prepends "UPDATED:
-  // [time] - " to the title (confirmed directly: "UPDATED: 9:20am -
-  // Daily bulletin Sep 14, 2026 Mon"), which an anchored ^ match would
-  // miss entirely - the button would wrongly report no bulletin found
-  // on exactly the days it matters most (a reissue).
-  function findTodaysBulletinLink() {
-    const link = Array.from(
-      document.querySelectorAll("#news-component a")
-    ).find((a) => /Daily bulletin/i.test(a.textContent));
-    const href = link ? link.href : null;
-    console.log("Schoolbox UX tweaks: found bulletin link", href);
-    return href;
-  }
-
-  // ASSUMPTION, not yet confirmed against the live article markup:
-  // that the bulletin's PDF attachment shows up as a plain <a
-  // href="....pdf"> somewhere on the fetched article page. If
-  // Schoolbox wraps attachments in something less direct (a download
-  // button, a JS-driven link, etc.) this will come back empty and
-  // the button will report "No attachment found" - worth checking
-  // against a real bulletin post and adjusting this selector if so.
-  async function findBulletinPdfUrl(newsUrl) {
-    console.log("Schoolbox UX tweaks: fetching bulletin article", newsUrl);
-    const res = await fetch(newsUrl, { credentials: "include" });
-    const html = await res.text();
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const pdfLink = doc.querySelector('a[href$=".pdf"]');
-    const pdfUrl = pdfLink
-      ? new URL(pdfLink.getAttribute("href"), newsUrl).href
-      : null;
-    console.log("Schoolbox UX tweaks: found PDF attachment", pdfUrl);
-    return pdfUrl;
-  }
-
-  // The R2 redirect target sends no Access-Control-Allow-Origin header
-  // at all - not a credentials issue, this bucket just isn't
-  // configured for browser-side CORS. A content script's fetch() is
-  // bound by the same CORS rules as the page itself, so there's no
-  // fetch() option here that gets around it. The background service
-  // worker (background.js) is a different context: with the
-  // host_permissions declared in manifest.json, its fetches aren't
-  // subject to CORS at all. So this hands the actual network request
-  // off to it and gets the bytes back as base64 over
-  // chrome.runtime.sendMessage (structured message passing doesn't
-  // reliably carry raw ArrayBuffers).
-  function fetchPdfBytes(pdfUrl) {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        { type: "FETCH_PDF_BYTES", url: pdfUrl },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-          if (!response || !response.ok) {
-            reject(
-              new Error(response?.error || "Background PDF fetch failed")
-            );
-            return;
-          }
-          const binary = atob(response.base64);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
-          }
-          resolve(bytes);
-        }
-      );
-    });
-  }
-
-  // Reconstructs rough text lines from pdf.js's flat item list by
-  // bucketing items that share a y-position (rounded to absorb minor
-  // baseline differences within the same visual line, e.g. mixed
-  // bold/regular text), then ordering each bucket left-to-right.
-  // This is a heuristic - it hasn't been verified against the real
-  // bulletin PDF's actual internal layout, and may need the rounding
-  // tolerance adjusted if rows come out split or merged incorrectly.
-  async function extractPdfText(pdfUrl) {
-    const pdfjsLib = await loadPdfJsLib();
-    console.log("Schoolbox UX tweaks: fetching bulletin PDF", pdfUrl);
-    const bytes = await fetchPdfBytes(pdfUrl);
-    const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
-
-    const lines = [];
-    for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
-      const page = await doc.getPage(pageNum);
-      const content = await page.getTextContent();
-
-      const rows = new Map();
-      content.items.forEach((item) => {
-        const y = Math.round(item.transform[5] / 2) * 2;
-        if (!rows.has(y)) rows.set(y, []);
-        rows.get(y).push(item);
-      });
-
-      Array.from(rows.keys())
-        .sort((a, b) => b - a)
-        .forEach((y) => {
-          const rowText = rows
-            .get(y)
-            .sort((a, b) => a.transform[4] - b.transform[4])
-            .map((item) => item.str)
-            .join(" ")
-            .replace(/\s+/g, " ")
-            .trim();
-          if (rowText) lines.push(rowText);
-        });
-    }
-    return lines.join("\n");
-  }
-
-  // TEMPORARY TEST OVERRIDE: set to a "Lastname, Firstname" string to force
-  // relief-check parsing to match that name instead of the signed-in user.
-  // Set back to null when done testing.
-  const DEBUG_RELIEF_NAME = null;
-
-  // window.schoolboxUser is set by Schoolbox's own inline <script> in
-  // the page's JS world, which this (isolated-world) content script
-  // can't see directly. main-world-bridge.js copies the two fields
-  // needed onto a DOM attribute instead, since the DOM - unlike JS
-  // globals - genuinely is shared between the two worlds.
-  function getSchoolboxUserMatchName() {
-    if (DEBUG_RELIEF_NAME) return DEBUG_RELIEF_NAME;
-    const raw = document.documentElement.getAttribute("data-schoolbox-user");
-    if (!raw) return null;
-    try {
-      const user = JSON.parse(raw);
-      if (!user.lastname || !user.firstname) return null;
-      return `${user.lastname}, ${user.firstname}`;
-    } catch (err) {
-      return null;
-    }
-  }
-
-  // Matches the bulletin's repeated per-person blocks:
-  //   "Southwood, Gus (SOUTAN01) , you have been assigned the
-  //   following cover today :
-  //   Period Room Class name Class code Class teacher
-  //   HH L.1 Homeroom (House) 10DJERAN.01 Southwood, Gus"
-  // matchName comes from getSchoolboxUserMatchName() rather than
-  // hardcoding, so this works correctly for whoever is signed in.
-  function parseCoveringAssignments(text, matchName) {
-    const escapedName = matchName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const blockRegex = new RegExp(
-      escapedName +
-        "\\s*\\([A-Z0-9]+\\)\\s*,\\s*you have been assigned the following cover today\\s*:([\\s\\S]*?)(?=" +
-        escapedName +
-        "\\s*\\(|$)",
-      "g"
-    );
-    const rowRegex =
-      /(HH|[1-6]H)\s+(\S+)\s+(.+?)\s+([A-Z0-9]+\.[0-9]+)\s+(.+)/;
-
-    const nameIndex = text.indexOf(matchName);
-    console.log(
-      "Schoolbox UX tweaks: relief parse - matchName",
-      JSON.stringify(matchName),
-      "text.length",
-      text.length,
-      "text.indexOf(matchName)",
-      nameIndex
-    );
-    if (nameIndex !== -1) {
-      console.log(
-        "Schoolbox UX tweaks: relief parse - text around match",
-        text.slice(Math.max(0, nameIndex - 100), nameIndex + 600)
-      );
-    }
-
-    const coverBlockNameRegex =
-      /([^\n,]+,\s*[^\n(]+?)\s*\([A-Z0-9]+\)\s*,\s*you have been assigned the following cover today/g;
-    const namesWithCoverBlocks = [];
-    let nameMatch;
-    while ((nameMatch = coverBlockNameRegex.exec(text))) {
-      namesWithCoverBlocks.push(nameMatch[1].trim());
-    }
-    console.log(
-      "Schoolbox UX tweaks: relief parse - names with cover blocks:",
-      namesWithCoverBlocks
-    );
-
-    const results = [];
-    let match;
-    while ((match = blockRegex.exec(text))) {
-      const rowMatch = match[1].match(rowRegex);
-      console.log(
-        "Schoolbox UX tweaks: relief parse - block",
-        match[1],
-        "rowRegex matched?",
-        !!rowMatch
-      );
-      if (!rowMatch) continue;
-      results.push({
-        periodCode: rowMatch[1].trim(),
-        room: rowMatch[2].trim(),
-        className: rowMatch[3].trim(),
-        classCode: rowMatch[4].trim(),
-      });
-    }
-
-    // Covers table rows (used when the bulletin has no "assigned the
-    // following cover today" blocks for anyone): one line per period,
-    // e.g. "HH Filardo, Brooke 11MAKURU.01 K.2". The absent teacher's
-    // name wraps onto neighbouring lines and is never in this slot, so
-    // matching matchName right after the period code is enough to
-    // avoid picking it up. Event rows like "HH - HoD Duty/Meeting 3"
-    // have "-" in the teacher slot and so never match matchName here.
-    // The bulletin writes covering teachers either as "Last, First" or
-    // as "First Last" (no comma), so accept both.
-    const nameVariants = [matchName];
-    const commaAt = matchName.indexOf(",");
-    if (commaAt !== -1) {
-      const last = matchName.slice(0, commaAt).trim();
-      const first = matchName.slice(commaAt + 1).trim();
-      if (last && first) nameVariants.push(`${first} ${last}`);
-    }
-    const tableRowRegex = /^(HH|[1-6]H)\s+(.+)$/i;
-    const nameStartRegexes = nameVariants.map((variant) => {
-      const escapedVariantLoose = variant
-        .trim()
-        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-        .replace(/\s+/g, "\\s+");
-      return {
-        variant,
-        regex: new RegExp("^" + escapedVariantLoose + "\\s+(.+)$", "i"),
-      };
-    });
-    text.split("\n").forEach((line) => {
-      const trimmed = line.trim();
-      const rowMatch = trimmed.match(tableRowRegex);
-      if (!rowMatch) return;
-      const rest = rowMatch[2].trim();
-      let matchedVariant = null;
-      let nameMatch = null;
-      for (const { variant, regex } of nameStartRegexes) {
-        const m = rest.match(regex);
-        if (m) {
-          matchedVariant = variant;
-          nameMatch = m;
-          break;
-        }
-      }
-      if (!nameMatch) return;
-
-      const periodCode = rowMatch[1].toUpperCase();
-      const tail = nameMatch[1].trim().split(/\s+/);
-      if (tail.length < 2) return;
-      const room = tail[tail.length - 1];
-      const classCode = tail.slice(0, -1).join(" ");
-
-      const isDuplicate = results.some(
-        (result) =>
-          result.periodCode === periodCode && result.classCode === classCode
-      );
-      if (isDuplicate) return;
-
-      console.log(
-        "Schoolbox UX tweaks: relief parse - table row matched:",
-        trimmed,
-        "matchedVariant",
-        matchedVariant
-      );
-      results.push({ periodCode, room, className: "", classCode });
-    });
-
-    return results;
-  }
 
   function getDesktopTimetableTable() {
     return document.querySelector("table.timetable[data-timetable]");
@@ -2003,7 +1687,7 @@
   // - callers that care which specific one to mark disambiguate using
   // the assignment's class code instead of assuming index 0.
   function findColumnIndexesForPeriodCode(table, periodCode) {
-    const startTime = RELIEF_PERIOD_START_TIMES[periodCode];
+    const startTime = PERIOD_START_TIMES[periodCode];
     if (!startTime) return [];
 
     const headerCells = Array.from(table.querySelectorAll("thead th"));
@@ -2017,218 +1701,11 @@
     return indexes;
   }
 
-  // The bulletin writes class codes with a dot ("10DJERAN.01"); the
-  // dashboard timetable writes them with a space ("10DJERAN 01").
-  // Normalising both the same way lets them compare equal.
+  // Class codes show up with a dot in some places ("10DJERAN.01")
+  // and a space in others ("10DJERAN 01"). Normalising both the same
+  // way lets them compare equal.
   function normaliseClassCode(code) {
     return code.replace(/[.\s]+/g, " ").trim().toLowerCase();
-  }
-
-  // Non-destructive by design: rather than overwriting the cell's
-  // existing content (which would lose the "Mark Attendance" link
-  // and the original class info), this adds a red border to the
-  // whole cell plus a small overlay banner naming the class being
-  // covered. Re-running (e.g. clicking the button twice) is safe -
-  // already-marked cells are skipped.
-  function markCoveringCell(cell, assignment) {
-    const subject = cell.querySelector(".timetable-subject");
-    if (!subject || subject.classList.contains("my-relief-cover")) return;
-
-    subject.classList.add("my-relief-cover");
-
-    const banner = document.createElement("div");
-    banner.className = "my-relief-cover-banner";
-    banner.textContent = assignment.className
-      ? `Covering: ${assignment.className} (${assignment.classCode}), ${assignment.room}`
-      : `Covering: ${assignment.classCode}, ${assignment.room}`;
-    subject.insertBefore(banner, subject.firstChild);
-  }
-
-  // When a period has only one column, this is trivial. When it has
-  // more than one (a combined/split period, like two ATAR units both
-  // starting 9:45am), the class code in the assignment picks out
-  // which specific column is actually being covered. If none of the
-  // candidates' codes match - the covered class isn't one of the
-  // user's own displayed classes at all - every candidate column gets
-  // marked instead of silently guessing wrong or dropping it.
-  function markCoveringAssignment(table, assignment) {
-    const columnIndexes = findColumnIndexesForPeriodCode(
-      table,
-      assignment.periodCode
-    );
-    if (!columnIndexes.length) return false;
-
-    const row = table.querySelector("tbody tr");
-    if (!row) return false;
-
-    const targetCode = normaliseClassCode(assignment.classCode);
-    const matchingIndex = columnIndexes.find((index) => {
-      const cell = row.children[index];
-      if (!cell) return false;
-      const codeEl = cell.querySelector(".timetable-subject > div");
-      return codeEl && normaliseClassCode(codeEl.textContent) === targetCode;
-    });
-
-    const indexesToMark =
-      matchingIndex !== undefined ? [matchingIndex] : columnIndexes;
-
-    let marked = false;
-    indexesToMark.forEach((index) => {
-      const cell = row.children[index];
-      if (cell) {
-        markCoveringCell(cell, assignment);
-        marked = true;
-      }
-    });
-    return marked;
-  }
-
-  function resetReliefButton(button) {
-    button.disabled = false;
-    button.classList.remove("my-relief-checked");
-    button.textContent = "Check for relief";
-  }
-
-  // Keyed by today's date so a stored result from yesterday is simply
-  // never read back - no separate cleanup needed, it just becomes
-  // irrelevant once the date rolls over.
-  function getReliefStorageKey() {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    return `reliefCheck-${y}-${m}-${d}`;
-  }
-
-  // Only the assignments themselves are stored - not the button's
-  // rendered text, not the applied count. Re-marking the table from
-  // the same assignments on restore reuses the exact same code path
-  // (and the same idempotency guard) as a live check, rather than
-  // keeping a second, parallel way of rendering the same information.
-  function saveReliefCheckResult(assignments, checkedAtMs) {
-    chrome.storage.local.set({
-      [getReliefStorageKey()]: { assignments, checkedAtMs },
-    });
-  }
-
-  function formatReliefButtonLabel(appliedCount, checkedAtMs) {
-    const timeLabel = new Date(checkedAtMs).toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-    return appliedCount
-      ? `Checked at ${timeLabel} — ${appliedCount} cover${
-          appliedCount === 1 ? "" : "s"
-        } found`
-      : `Checked at ${timeLabel} — no cover today`;
-  }
-
-  // Runs once, right after the button is first created - restores
-  // today's already-checked state (if any) purely from local storage,
-  // no fetch involved. This is why the button doesn't look like it's
-  // "forgotten" a check after a page refresh: the check itself only
-  // ever happens on click, but its result now survives a reload.
-  function restoreReliefCheckResult(button) {
-    chrome.storage.local.get(getReliefStorageKey(), (result) => {
-      const stored = result[getReliefStorageKey()];
-      if (!stored) return;
-
-      const table = getDesktopTimetableTable();
-      let appliedCount = 0;
-      if (table) {
-        stored.assignments.forEach((assignment) => {
-          if (markCoveringAssignment(table, assignment)) appliedCount++;
-        });
-      }
-
-      button.textContent = formatReliefButtonLabel(
-        appliedCount,
-        stored.checkedAtMs
-      );
-      button.classList.add("my-relief-checked");
-    });
-  }
-
-  async function checkForRelief(button) {
-    button.disabled = true;
-    button.textContent = "Checking…";
-
-    try {
-      const bulletinUrl = findTodaysBulletinLink();
-      if (!bulletinUrl) {
-        button.textContent = "No bulletin found today";
-        setTimeout(() => resetReliefButton(button), 4000);
-        return;
-      }
-
-      const matchName = getSchoolboxUserMatchName();
-      if (!matchName) {
-        button.textContent = "Couldn't read your name";
-        setTimeout(() => resetReliefButton(button), 4000);
-        return;
-      }
-
-      const pdfUrl = await findBulletinPdfUrl(bulletinUrl);
-      if (!pdfUrl) {
-        button.textContent = "No attachment found";
-        setTimeout(() => resetReliefButton(button), 4000);
-        return;
-      }
-
-      const text = await extractPdfText(pdfUrl);
-      console.log(
-        "Schoolbox UX tweaks: relief parse - extracted text length",
-        text.length
-      );
-      const assignments = parseCoveringAssignments(text, matchName);
-
-      const table = getDesktopTimetableTable();
-      let appliedCount = 0;
-      if (table) {
-        assignments.forEach((assignment) => {
-          if (markCoveringAssignment(table, assignment)) appliedCount++;
-        });
-      }
-
-      const checkedAtMs = Date.now();
-      button.textContent = formatReliefButtonLabel(appliedCount, checkedAtMs);
-      button.classList.add("my-relief-checked");
-      button.disabled = false;
-
-      console.log(
-        "Schoolbox UX tweaks: relief parse - assignments",
-        assignments,
-        "appliedCount",
-        appliedCount
-      );
-
-      // Saved regardless of whether any cover was found - a confirmed
-      // "no cover today" is still a completed check, and should
-      // survive a refresh the same way a positive result does.
-      saveReliefCheckResult(assignments, checkedAtMs);
-    } catch (err) {
-      console.error("Schoolbox UX tweaks: relief check failed", err);
-      button.textContent = "Check failed — try again";
-      setTimeout(() => resetReliefButton(button), 4000);
-      button.disabled = false;
-    }
-  }
-
-  function addCheckForReliefButton() {
-    if (!isDashboardPage()) return;
-    if (document.querySelector(".my-relief-check-button")) return;
-
-    const header = document.querySelector("[data-timetable-header]");
-    if (!header) return;
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "my-relief-check-button";
-    button.textContent = "Check for relief";
-    button.addEventListener("click", () => checkForRelief(button));
-
-    header.insertAdjacentElement("afterend", button);
-    restoreReliefCheckResult(button);
   }
 
   // ---------------------------------------------------------------
@@ -2238,10 +1715,9 @@
   // stored once and shown every matching day of the week - managed
   // from the "My duties" section of the nav dropdown panel. Two
   // shapes:
-  //  - "session" duties land on an existing timetable column (same
-  //    period-code/start-time lookup already built for relief-check)
-  //    as a small banner, non-destructively, the same way the relief
-  //    banner does.
+  //  - "session" duties land on an existing timetable column (using
+  //    PERIOD_START_TIMES above to find it) as a small banner,
+  //    non-destructively.
   //  - "gap" duties (before school / recess / lunch / after school)
   //    have no existing column to attach to, so this inserts one -
   //    but only for a gap that actually has a duty today, so a normal
@@ -2263,7 +1739,7 @@
     5: "Friday",
   };
 
-  // afterSlot is the ordinal position (into RELIEF_PERIOD_START_TIMES'
+  // afterSlot is the ordinal position (into PERIOD_START_TIMES'
   // own key order) of the last session column that comes before this
   // gap; -1 means "before every session column". Ordinal rather than
   // time-based so it still lands in the right place even on a
@@ -2277,7 +1753,7 @@
     { code: "ASH", label: "After school", afterSlot: 6 },
   ];
 
-  const DUTY_SESSION_CODES = Object.keys(RELIEF_PERIOD_START_TIMES);
+  const DUTY_SESSION_CODES = Object.keys(PERIOD_START_TIMES);
 
   function dutySessionSlot(code) {
     return DUTY_SESSION_CODES.indexOf(code);
@@ -2298,7 +1774,7 @@
   // index after it.
   function getExistingSessionColumns(table) {
     const startTimeToCode = {};
-    Object.entries(RELIEF_PERIOD_START_TIMES).forEach(([code, time]) => {
+    Object.entries(PERIOD_START_TIMES).forEach(([code, time]) => {
       startTimeToCode[time.toLowerCase()] = code;
     });
 
@@ -2368,8 +1844,8 @@
     });
   }
 
-  // Non-destructive, the same approach as markCoveringCell(): adds a
-  // small banner rather than replacing the cell's own content, so the
+  // Non-destructive: adds a small banner rather than replacing the
+  // cell's own content, so the
   // "Class List | Markbook" links and "Mark Attendance" link
   // underneath stay intact.
   function renderSessionDuty(table, duty) {

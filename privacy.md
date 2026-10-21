@@ -23,8 +23,6 @@ one click away) to the signed-in user on Schoolbox pages, including:
 - Pastoral-care flags, including Medical Alert and Risk Management
   Plan flags
 - Class, timetable, and Markbook information
-- The text of a daily staff bulletin PDF, when the user manually
-  clicks "Check for relief"
 
 This is the same information the user could already see themselves
 by using Schoolbox normally — the extension does not access anything
@@ -49,25 +47,19 @@ other purpose.
 The only network requests the extension makes are to Schoolbox
 itself (to load pages the user is already viewing or navigating to)
 and to the storage host Schoolbox's own file-download links redirect
-to, in order to fetch a single already-authorised file (the daily
-bulletin PDF) on the user's behalf. No request is made to any other
+to, in order to fetch an already-authorised file (such as a seating
+chart layout) on the user's behalf. No request is made to any other
 destination.
 
 ## What is stored, and for how long
 
-The extension stores two small pieces of information locally, using
-Chrome's built-in storage APIs:
+The extension stores its settings and preferences (such as the
+on/off toggle for its page modifications) locally, using Chrome's
+`chrome.storage.sync` API — kept until the user changes them or
+uninstalls the extension.
 
-1. **An on/off toggle** for the extension's page modifications
-   (`chrome.storage.sync`) — kept until the user changes it or
-   uninstalls the extension.
-2. **The result of the day's "Check for relief" click**
-   (`chrome.storage.local`) — kept only for that calendar day, so a
-   page refresh doesn't lose the result; a new day's result simply
-   replaces it.
-
-Neither is transmitted anywhere. Uninstalling the extension removes
-both.
+None of this is transmitted anywhere. Uninstalling the extension
+removes it.
 
 ## Changes to this policy
 

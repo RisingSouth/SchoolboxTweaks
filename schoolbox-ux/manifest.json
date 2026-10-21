@@ -32,11 +32,5 @@
       "js": ["tweak-config.js", "content.js"],
       "run_at": "document_idle"
     }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["vendor/pdfjs/pdf.mjs", "vendor/pdfjs/pdf.worker.mjs"],
-      "matches": ["https://my.careywa.au/*"]
-    }
   ]
 }

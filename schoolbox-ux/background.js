@@ -1,18 +1,17 @@
 // Background service worker.
 //
-// Handles things a content script can't do on its own: fetching the
-// bulletin PDF and Seat layout files, and opening the Options page
+// Handles things a content script can't do on its own: fetching Seat
+// layout files, and opening the Options page
 // (chrome.runtime.openOptionsPage() is extension-process-only). The
-// fetches exist because both
-// my.careywa.au/storage/fetch.php and my.careywa.au/send.php
-// redirect to a signed Cloudflare R2 URL that sends no
-// Access-Control-Allow-Origin header at all. A content script's
-// fetch() is bound by the same CORS rules as the page itself, so no
-// fetch() option from content.js can get around that - it's not a
-// credentials problem, R2 just isn't configured for browser-side
-// CORS on this bucket. A background service worker is a different
-// context: with the right host_permissions (see manifest.json), its
-// fetches aren't subject to CORS at all.
+// fetch exists because my.careywa.au/send.php redirects to a signed
+// Cloudflare R2 URL that sends no Access-Control-Allow-Origin header
+// at all. A content script's fetch() is bound by the same CORS rules
+// as the page itself, so no fetch() option from content.js can get
+// around that - it's not a credentials problem, R2 just isn't
+// configured for browser-side CORS on this bucket. A background
+// service worker is a different context: with the right
+// host_permissions (see manifest.json), its fetches aren't subject to
+// CORS at all.
 //
 // (Previously also opened the Class List/Markbook links via
 // chrome.tabs.create() to dodge Schoolbox's PWA link-capturing on
@@ -26,36 +25,6 @@
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!message) return false;
-
-  if (message.type === "FETCH_PDF_BYTES") {
-    (async () => {
-      try {
-        const res = await fetch(message.url);
-        if (!res.ok) {
-          throw new Error(`PDF fetch returned HTTP ${res.status}`);
-        }
-        const buffer = await res.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-
-        // Chunked to avoid blowing the call stack on
-        // String.fromCharCode with a large PDF's worth of bytes in
-        // one call.
-        let binary = "";
-        const chunkSize = 0x8000;
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          binary += String.fromCharCode.apply(
-            null,
-            bytes.subarray(i, i + chunkSize)
-          );
-        }
-
-        sendResponse({ ok: true, base64: btoa(binary) });
-      } catch (err) {
-        sendResponse({ ok: false, error: String(err) });
-      }
-    })();
-    return true; // keep the message channel open for the async response
-  }
 
   if (message.type === "OPEN_OPTIONS_PAGE") {
     // chrome.runtime.openOptionsPage() only works from an extension
