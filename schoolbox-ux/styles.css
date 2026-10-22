@@ -901,14 +901,96 @@ body.my-pastoral-panel-open #content {
 }
 
 /*
-  PMI removed stepback helper - the "from/to [Start]" and "step X of
-  N" bar on the add-record page, and the "Next: Down to PMI..."
-  banner on the student profile page. All scoped under these
-  my-tweak-pmi-* classes so nothing here applies if the tweak toggle
-  is off (the toggle only ever skips adding these classes in the
-  first place - there's no body-level class to gate on here the way
+  PMI removed stepback helper - the "PMI removed" button and popup on
+  the add-record page, the progress strip above the Title field once
+  a stepback is active, and the "N of total saved" banner on the
+  student profile page. All scoped under these my-tweak-pmi-* classes
+  so nothing here applies if the tweak toggle is off (the toggle only
+  ever skips adding these classes in the first place - there's no
+  body-level class to gate on here the way
   markbookFullHeight/courseListImprovements do).
 */
+.my-tweak-pmi-open-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  margin: 0 0 12px 0;
+  font-size: 0.9em;
+  border: 1px solid rgb(30, 105, 128);
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(30, 105, 128);
+  cursor: pointer;
+}
+
+.my-tweak-pmi-open-button:hover {
+  background: rgb(212, 229, 232);
+}
+
+.my-tweak-pmi-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 999999;
+}
+
+.my-tweak-pmi-modal {
+  width: 320px;
+  padding: 20px;
+  border-radius: 6px;
+  background: white;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.my-tweak-pmi-modal-title {
+  margin: 0 0 14px 0;
+  font-size: 1.05em;
+}
+
+.my-tweak-pmi-modal-row {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.my-tweak-pmi-modal-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8em;
+  color: rgb(102, 102, 102);
+}
+
+.my-tweak-pmi-modal-hint {
+  margin-bottom: 8px;
+  font-size: 0.85em;
+  color: rgb(102, 102, 102);
+}
+
+.my-tweak-pmi-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.my-tweak-pmi-modal-cancel {
+  padding: 4px 12px;
+  border: 1px solid rgb(180, 180, 180);
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(102, 102, 102);
+  cursor: pointer;
+}
+
+.my-tweak-pmi-modal-cancel:hover {
+  background: rgb(240, 240, 240);
+}
+
 .my-tweak-pmi-bar {
   display: flex;
   align-items: center;
