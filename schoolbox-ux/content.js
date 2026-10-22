@@ -2741,6 +2741,56 @@
     );
   }
 
+  // The note's CKEditor instance only exists in the page's own JS
+  // world (window.sbProps.editors.body_public) - content.js runs
+  // isolated from that, so this hands the actual read/edit/write off
+  // to main-world-bridge.js over a CustomEvent round-trip on the
+  // shared DOM (the one thing genuinely shared between the two
+  // worlds), the same reasoning already documented there for
+  // window.schoolboxUser. Only a request id crosses the boundary,
+  // never the editor object itself.
+  //
+  // main-world-bridge.js does its own polling (editor not existing
+  // yet, or the Sub-type's template table not having swapped in yet -
+  // see PMI_NOTE_* there) up to ~5s and replies with ok: true/false.
+  // The timeout here is slightly longer than that, purely as a
+  // fallback for main-world-bridge.js not being loaded/responding at
+  // all - it should never normally fire on its own.
+  let pmiNoteFillRequestCounter = 0;
+
+  function requestPmiNoteFill(onDone) {
+    const requestId = "pmi-note-" + Date.now() + "-" + (++pmiNoteFillRequestCounter);
+    let settled = false;
+
+    function onResponse(event) {
+      if (!event.detail || event.detail.requestId !== requestId) return;
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("my-pmi-note-fill-response", onResponse);
+      clearTimeout(timer);
+      if (!event.detail.ok) {
+        console.log(
+          "[my-pmi-stepback] note fill did not apply, reason:",
+          event.detail.reason
+        );
+      }
+      onDone(!!event.detail.ok);
+    }
+    document.addEventListener("my-pmi-note-fill-response", onResponse);
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("my-pmi-note-fill-response", onResponse);
+      console.log("[my-pmi-stepback] note-fill request got no response");
+      onDone(false);
+    }, 6000);
+
+    document.dispatchEvent(
+      new CustomEvent("my-pmi-note-fill-request", { detail: { requestId } })
+    );
+  }
+
   // Counts how many of this student's existing records have a title
   // that exactly matches (trimmed, case-insensitive) the one given -
   // this is "how many of this stepback's records are already saved",
@@ -2816,7 +2866,19 @@
           title
         );
         progressText.textContent = "Couldn't set Type/Sub-type, fill manually";
+        return;
       }
+
+      // Only attempted once Type/Sub-type/Title are confirmed set -
+      // the note's template table is loaded by the Sub-type change,
+      // so filling it any earlier would just hit "no-row" instantly.
+      requestPmiNoteFill((noteOk) => {
+        if (noteOk) return;
+        const warning = document.createElement("span");
+        warning.className = "my-tweak-pmi-error";
+        warning.textContent = "Couldn't fill note, add it manually";
+        bar.insertBefore(warning, cancelLink);
+      });
     });
 
     return bar;
@@ -2925,7 +2987,11 @@
       if (levels) {
         const total = levels.from - levels.to;
         hint.textContent =
-          "This makes " + total + (total === 1 ? " record." : " records.");
+          "This makes " +
+          total +
+          (total === 1
+            ? " record with the same title."
+            : " records with the same title.");
         error.textContent = "";
       } else {
         hint.textContent = "Enter both PMI levels.";
@@ -3058,20 +3124,84 @@
   // as pmiBarBuilding above.
   let pmiBannerBuilding = false;
 
-  // "PMI {from} -> {to} - N of total saved - Add next record" banner,
-  // or "All N saved" once the last one lands. N is always the real
-  // count of matching-title records on this page's own already-
-  // rendered history (#pastoralRecords), not a stored counter.
+  const PMI_BANNER_COUNTDOWN_SECONDS = 3;
+
+  // "PMI {from} -> {to} - K of N saved - Opening entry K+1 in T...
+  // [Cancel] [Open now]" banner, counting down to a same-tab
+  // navigation to the add page - plain <a href> / location.href, not
+  // chrome.tabs.create or window.open, since those are what tripped
+  // the PWA link-capturing issue noted elsewhere in this file for
+  // timetable links (see (h) in the report this was built against).
+  // Pressing Cancel here only stops the auto-open and swaps the
+  // banner's own two links for a manual "Add next record"/"Stop
+  // sequence" pair, in place - it never clears the stored stepback by
+  // itself; "Stop sequence" (or "Dismiss" once complete) is what
+  // clears that. Once all N are saved, this instead shows a plain
+  // "All N saved" line and clears the stored stepback itself.
+  //
+  // K is always the real count of matching-title records on this
+  // page's own already-rendered history (#pastoralRecords), not a
+  // stored counter.
   function renderPmiBanner(studentId, seq, savedCount, total, allSaved) {
     if (document.querySelector(".my-tweak-pmi-banner")) return;
 
     const banner = document.createElement("div");
     banner.className = "my-tweak-pmi-banner";
 
+    if (allSaved) {
+      const text = document.createElement("span");
+      text.textContent =
+        "All " + total + " saved · PMI " + seq.from + " → " + seq.to + " complete";
+      banner.appendChild(text);
+
+      const content = document.querySelector("#content") || document.body;
+      content.insertBefore(banner, content.firstChild);
+      return;
+    }
+
+    const addHref = "/pastoral/student/" + studentId + "/record/insert";
+    const nextEntry = savedCount + 1;
+
     const text = document.createElement("span");
-    text.textContent = allSaved
-      ? "PMI " + seq.from + " → " + seq.to + " · All " + total + " saved"
-      : "PMI " +
+    const actions = document.createElement("span");
+    actions.className = "my-tweak-pmi-banner-actions";
+    banner.appendChild(text);
+    banner.appendChild(actions);
+
+    let countdownTimer = null;
+    let secondsLeft = PMI_BANNER_COUNTDOWN_SECONDS;
+
+    function renderManual() {
+      if (countdownTimer) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+      }
+
+      text.textContent =
+        "PMI " + seq.from + " → " + seq.to + " · " + savedCount + " of " + total + " saved";
+      actions.textContent = "";
+
+      const addLink = document.createElement("a");
+      addLink.href = addHref;
+      addLink.className = "my-tweak-pmi-banner-add";
+      addLink.textContent = "Add next record";
+      actions.appendChild(addLink);
+
+      const stopLink = document.createElement("a");
+      stopLink.href = "#";
+      stopLink.className = "my-tweak-pmi-banner-cancel";
+      stopLink.textContent = "Stop sequence";
+      stopLink.addEventListener("click", (event) => {
+        event.preventDefault();
+        clearPmiStepback();
+        banner.remove();
+      });
+      actions.appendChild(stopLink);
+    }
+
+    function renderCountdown() {
+      text.textContent =
+        "PMI " +
         seq.from +
         " → " +
         seq.to +
@@ -3079,27 +3209,44 @@
         savedCount +
         " of " +
         total +
-        " saved";
-    banner.appendChild(text);
+        " saved · Opening entry " +
+        nextEntry +
+        " in " +
+        secondsLeft +
+        "…";
+      actions.textContent = "";
 
-    if (!allSaved) {
-      const addLink = document.createElement("a");
-      addLink.href = "/pastoral/student/" + studentId + "/record/insert";
-      addLink.className = "my-tweak-pmi-banner-add";
-      addLink.textContent = "Add next record";
-      banner.appendChild(addLink);
+      const cancelLink = document.createElement("a");
+      cancelLink.href = "#";
+      cancelLink.className = "my-tweak-pmi-banner-cancel";
+      cancelLink.textContent = "Cancel";
+      cancelLink.addEventListener("click", (event) => {
+        event.preventDefault();
+        renderManual();
+      });
+      actions.appendChild(cancelLink);
+
+      const openNowLink = document.createElement("a");
+      openNowLink.href = addHref;
+      openNowLink.className = "my-tweak-pmi-banner-add";
+      openNowLink.textContent = "Open now";
+      openNowLink.addEventListener("click", () => {
+        if (countdownTimer) clearInterval(countdownTimer);
+      });
+      actions.appendChild(openNowLink);
     }
 
-    const cancelLink = document.createElement("a");
-    cancelLink.href = "#";
-    cancelLink.className = "my-tweak-pmi-banner-cancel";
-    cancelLink.textContent = allSaved ? "Dismiss" : "Cancel";
-    cancelLink.addEventListener("click", (event) => {
-      event.preventDefault();
-      clearPmiStepback();
-      banner.remove();
-    });
-    banner.appendChild(cancelLink);
+    renderCountdown();
+    countdownTimer = setInterval(() => {
+      secondsLeft -= 1;
+      if (secondsLeft <= 0) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+        window.location.href = addHref;
+        return;
+      }
+      renderCountdown();
+    }, 1000);
 
     const content = document.querySelector("#content") || document.body;
     content.insertBefore(banner, content.firstChild);
