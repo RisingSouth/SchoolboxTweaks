@@ -928,6 +928,24 @@ body.my-pastoral-panel-open #content {
   background: rgb(212, 229, 232);
 }
 
+.my-tweak-commend-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  margin: 0 0 12px 0;
+  font-size: 0.9em;
+  border: 1px solid rgb(30, 105, 128);
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(30, 105, 128);
+  cursor: pointer;
+}
+
+.my-tweak-commend-button:hover {
+  background: rgb(212, 229, 232);
+}
+
 .my-tweak-pmi-modal-overlay {
   position: fixed;
   inset: 0;

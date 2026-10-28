@@ -149,6 +149,11 @@ const TWEAK_GROUPS = [
         label: "PMI removed sequence",
         description: "Prefills each step of a multi-level \"PMI removed\" sequence - you still press Save",
       },
+      {
+        id: "pastoralCommendation",
+        label: "Commendation shortcut (untested)",
+        description: "Sets Type/Sub-type to Recognition / Commendation and the Title to \"Commendation\" - you still press Save",
+      },
     ],
   },
 ];

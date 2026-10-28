@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Schoolbox UX Tweaks",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Small UX improvements for staff using Schoolbox.",
   "permissions": ["storage", "activeTab", "tabs"],
   "host_permissions": [

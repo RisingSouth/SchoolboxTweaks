@@ -38,6 +38,7 @@
     if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
     if (tweakToggles.pastoralRecordHistoryPanel) addPastoralRecordHistoryPanel();
     if (tweakToggles.pastoralPmiStepback) addPmiStepbackHelper();
+    if (tweakToggles.pastoralCommendation) addCommendationHelper();
 
     if (tweakToggles.courseListImprovements) initCourseListPage();
 
@@ -236,7 +237,7 @@
 
       const footer = document.createElement("div");
       footer.className = "my-nav-panel-footer";
-      footer.textContent = "v1.2.5";
+      footer.textContent = "v1.2.6";
       panel.appendChild(footer);
 
       document.body.appendChild(panel);
@@ -2592,6 +2593,11 @@
   const PMI_SUBTYPE_LABEL = "Personal Management Issue Removed";
   const PMI_SUBTYPE_POLL_TIMEOUT_MS = 5000;
 
+  // Shared across every unverified add-record-page helper (PMI removed,
+  // Commendation) so the "(untested)" marker can be deleted in one
+  // place once they're confirmed working against a real record.
+  const UNTESTED_FEATURE_SUFFIX = " (untested)";
+
   function isPastoralStudentProfilePage() {
     return /^\/pastoral\/student\/\d+\/?$/.test(window.location.pathname);
   }
@@ -2662,6 +2668,19 @@
     if (!option) return false;
 
     typeSelect.value = PMI_TYPE_VALUE;
+    typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }
+
+  // Same "options already in the page's own HTML" assumption as
+  // selectPmiType() above, but matching by label text instead of a
+  // known value - used by the Commendation helper, where only the
+  // option's visible label ("Recognition") is confirmed.
+  function selectTypeByLabel(typeSelect, label) {
+    const option = findOptionByLabel(typeSelect, label);
+    if (!option) return false;
+
+    typeSelect.value = option.value;
     typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
     return true;
   }
@@ -2901,7 +2920,7 @@
     const button = document.createElement("button");
     button.type = "button";
     button.className = "my-tweak-pmi-open-button";
-    button.textContent = "PMI removed";
+    button.textContent = "PMI removed" + UNTESTED_FEATURE_SUFFIX;
     button.addEventListener("click", () => openPmiModal(studentId));
 
     const historyToggle = document.querySelector(".my-pastoral-history-toggle");
@@ -2937,7 +2956,7 @@
 
     const titleEl = document.createElement("h3");
     titleEl.className = "my-tweak-pmi-modal-title";
-    titleEl.textContent = "PMI removed";
+    titleEl.textContent = "PMI removed" + UNTESTED_FEATURE_SUFFIX;
     modal.appendChild(titleEl);
 
     const row = document.createElement("div");
@@ -3290,6 +3309,111 @@
       const studentId = getPastoralProfileStudentIdFromUrl();
       if (studentId) addPmiStepbackOnProfilePage(studentId);
     }
+  }
+
+  // ---------------------------------------------------------------
+  // Pastoral record insert page: Commendation shortcut (untested)
+  //
+  // A plain one-click Type/Sub-type filler, same page as the PMI
+  // removed helper above but with none of its popup/stepback/storage
+  // machinery - there's nothing to resume across page loads, so
+  // there's nothing to store.
+  //
+  // NOT CONFIRMED (see report):
+  //  - COMMENDATION_SUBTYPE_LABEL is read off a record's "Type
+  //    (Sub-type)" display line, so the live #subtypeId option's
+  //    text may differ slightly
+  //  - what visibility this sub-type gets once selected
+  //    (loadAudience / data-visibility-locked, in the page's own JS)
+  //  - whether Schoolbox loads a note template for this sub-type the
+  //    way it does for "Personal Management Issue Removed" above
+  // ---------------------------------------------------------------
+
+  const COMMENDATION_TYPE_LABEL = "Recognition";
+  const COMMENDATION_SUBTYPE_LABEL = "Commendation (MyCarey Note)";
+  const COMMENDATION_HEADING_TEXT = "Commendation";
+
+  // Sets Type then Sub-type the same way prefillPmiStepbackFields()
+  // does (native bubbling "change" on #typeId, then
+  // selectPmiSubtypeByLabel()'s poll for chained.js to fill the
+  // Sub-type option) - only matching by label on both selects, since
+  // neither option's value is confirmed here. Title is left alone if
+  // the teacher has already typed something; every other field (note,
+  // visibility, related students) is untouched, and this never
+  // touches Save.
+  function prefillCommendationFields(onDone) {
+    const typeSelect = document.querySelector("#typeId");
+    const subtypeSelect = document.querySelector("#subtypeId");
+    const headingInput = document.querySelector("#heading");
+    if (!typeSelect || !subtypeSelect || !headingInput) {
+      onDone(false);
+      return;
+    }
+
+    if (!selectTypeByLabel(typeSelect, COMMENDATION_TYPE_LABEL)) {
+      onDone(false);
+      return;
+    }
+
+    selectPmiSubtypeByLabel(
+      subtypeSelect,
+      COMMENDATION_SUBTYPE_LABEL,
+      PMI_SUBTYPE_POLL_TIMEOUT_MS,
+      (subtypeOk) => {
+        if (!subtypeOk) {
+          onDone(false);
+          return;
+        }
+
+        if (!headingInput.value.trim()) {
+          headingInput.value = COMMENDATION_HEADING_TEXT;
+          headingInput.focus();
+          const end = headingInput.value.length;
+          headingInput.setSelectionRange(end, end);
+        }
+        onDone(true);
+      }
+    );
+  }
+
+  // The "Commendation (untested)" button next to the "PMI removed"
+  // one - same anchor and fallback chain as buildPmiOpenButton() so
+  // the two sit side by side regardless of which one applyTweaks()
+  // happens to add first.
+  function buildCommendationButton() {
+    if (document.querySelector(".my-tweak-commend-button")) return;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "my-tweak-commend-button";
+    button.textContent = "Commendation" + UNTESTED_FEATURE_SUFFIX;
+    button.addEventListener("click", () => {
+      prefillCommendationFields((ok) => {
+        if (!ok) {
+          console.log("[my-commendation] couldn't set Type/Sub-type");
+        }
+      });
+    });
+
+    const historyToggle = document.querySelector(".my-pastoral-history-toggle");
+    if (historyToggle && historyToggle.parentNode) {
+      historyToggle.insertAdjacentElement("afterend", button);
+      return;
+    }
+
+    const heading = document.querySelector("h1");
+    const anchorRow = heading ? heading.closest(".row") || heading : null;
+    if (anchorRow && anchorRow.parentNode) {
+      anchorRow.parentNode.insertBefore(button, anchorRow.nextSibling);
+    } else {
+      const content = document.querySelector("#content") || document.body;
+      content.insertBefore(button, content.firstChild);
+    }
+  }
+
+  function addCommendationHelper() {
+    if (!isPastoralRecordInsertPage()) return;
+    buildCommendationButton();
   }
 
   // ---------------------------------------------------------------
