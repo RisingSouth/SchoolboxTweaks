@@ -3376,7 +3376,7 @@
     );
   }
 
-  // The "Commendation (untested)" button next to the "PMI removed"
+  // The "Commendation" button next to the "PMI removed"
   // one - same anchor and fallback chain as buildPmiOpenButton() so
   // the two sit side by side regardless of which one applyTweaks()
   // happens to add first.
@@ -3386,7 +3386,7 @@
     const button = document.createElement("button");
     button.type = "button";
     button.className = "my-tweak-commend-button";
-    button.textContent = "Commendation" + UNTESTED_FEATURE_SUFFIX;
+    button.textContent = "Commendation";
     button.addEventListener("click", () => {
       prefillCommendationFields((ok) => {
         if (!ok) {

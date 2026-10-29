@@ -151,7 +151,7 @@ const TWEAK_GROUPS = [
       },
       {
         id: "pastoralCommendation",
-        label: "Commendation shortcut (untested)",
+        label: "Commendation shortcut",
         description: "Sets Type/Sub-type to Recognition / Commendation and the Title to \"Commendation\" - you still press Save",
       },
     ],
