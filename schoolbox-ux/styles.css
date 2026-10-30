@@ -1422,8 +1422,12 @@ body.my-tweak-course-list .my-cl-reset {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  min-width: 28px;
   height: 28px;
+  box-sizing: border-box;
+  font-size: 0.8125rem;
+  line-height: 1;
+  white-space: nowrap;
   padding: 0;
   margin: 0;
   border: 1px solid transparent;
@@ -1449,4 +1453,32 @@ body.my-tweak-course-list .my-cl-reset {
 .my-search-action--error {
   color: #b3261e;
   border-color: #b3261e;
+}
+
+/* Label slides open on hover/focus. The buttons box is anchored to the
+   right edge, so the expanded button grows leftwards over the card. */
+.my-search-action__text {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-width 0.18s ease, opacity 0.14s ease, margin 0.18s ease;
+}
+
+.my-search-action:hover .my-search-action__text,
+.my-search-action:focus-visible .my-search-action__text {
+  max-width: 6rem;
+  opacity: 1;
+  margin: 0 6px 0 4px;
+}
+
+.my-search-action:hover,
+.my-search-action:focus-visible {
+  position: relative;
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .my-search-action__text {
+    transition: none;
+  }
 }

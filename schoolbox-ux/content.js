@@ -1019,15 +1019,17 @@
       {
         icon: "add",
         label: "Add pastoral record",
+        short: "Add record",
         href: `/pastoral/student/${studentId}/record/insert`,
       },
       {
         icon: "pastoral",
         label: "Pastoral history",
+        short: "History",
         href: `/pastoral/student/${studentId}`,
       },
-      { icon: "approve", label: "Grades", href: `/learning/grades/${studentId}` },
-      { icon: "due-work", label: "Due work", href: `/learning/due/${studentId}` },
+      { icon: "approve", label: "Grades", short: "Grades", href: `/learning/grades/${studentId}` },
+      { icon: "due-work", label: "Due work", short: "Due work", href: `/learning/due/${studentId}` },
     ];
 
     const makeIcon = (iconName) => {
@@ -1038,6 +1040,15 @@
       return icon;
     };
 
+    // Short text revealed on hover/focus (CSS animates it open) so
+    // each icon says what it does without needing the native tooltip.
+    const makeText = (text) => {
+      const span = document.createElement("span");
+      span.className = "my-search-action__text";
+      span.textContent = text;
+      return span;
+    };
+
     linkActions.forEach((action) => {
       const link = document.createElement("a");
       link.className = "my-search-action";
@@ -1045,6 +1056,7 @@
       link.title = `${action.label} - ${name}`;
       link.setAttribute("aria-label", `${action.label} for ${name}`);
       link.appendChild(makeIcon(action.icon));
+      link.appendChild(makeText(action.short));
       inner.appendChild(link);
     });
 
@@ -1054,6 +1066,7 @@
     attendance.title = `Attendance today (Veracross) - ${name}`;
     attendance.setAttribute("aria-label", `Attendance today in Veracross for ${name}`);
     attendance.appendChild(makeIcon("clipboard"));
+    attendance.appendChild(makeText("Attendance"));
     // Keep focus in the search box on mousedown, so the dropdown
     // doesn't get a chance to close on blur before click fires.
     attendance.addEventListener("mousedown", (event) => event.preventDefault());
