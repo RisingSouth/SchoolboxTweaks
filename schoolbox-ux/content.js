@@ -946,7 +946,7 @@
 
   // Header search dropdown: adds a row of small icon buttons under each
   // STUDENT result (add pastoral record, pastoral history, grades, due
-  // work, Veracross attendance today). Every Schoolbox link is built
+  // work, timetable, Veracross attendance today). Every Schoolbox link is built
   // straight from the internal user id already in the result's own
   // href (/search/user/{id}) - no network request needed for those.
   //
@@ -1047,6 +1047,7 @@
       },
       { icon: "approve", label: "Grades", short: "Grades", href: `/learning/grades/${studentId}` },
       { icon: "due-work", label: "Due work", short: "Due work", href: `/learning/due/${studentId}` },
+      { icon: "timetable", label: "Timetable", short: "Timetable", href: `/timetable/${studentId}` },
     ];
 
     const makeIcon = (iconName) => {
