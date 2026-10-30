@@ -1486,3 +1486,11 @@ body.my-tweak-course-list .my-cl-reset {
     transition: none;
   }
 }
+
+/* After a press: no label, no animation, until the pointer leaves. */
+.my-search-action--pressed .my-search-action__text {
+  max-width: 0 !important;
+  opacity: 0 !important;
+  margin: 0 !important;
+  transition: none !important;
+}

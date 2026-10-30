@@ -1015,6 +1015,23 @@
     inner.className = "my-search-actions__buttons";
     row.appendChild(inner);
 
+    // Once a button has been pressed, keep its label shut until the
+    // pointer leaves it - the user clearly knows what it does, and the
+    // attendance button leaves the pointer sitting on it after opening
+    // its tab.
+    const suppressLabel = (event) => {
+      const btn = event.target.closest(".my-search-action");
+      if (btn) btn.classList.add("my-search-action--pressed");
+    };
+    inner.addEventListener("pointerdown", suppressLabel);
+    inner.addEventListener("click", suppressLabel);
+    inner.addEventListener("mouseout", (event) => {
+      const btn = event.target.closest(".my-search-action");
+      if (btn && !btn.contains(event.relatedTarget)) {
+        btn.classList.remove("my-search-action--pressed");
+      }
+    });
+
     const linkActions = [
       {
         icon: "add",
