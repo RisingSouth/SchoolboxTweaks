@@ -19,6 +19,11 @@ const TWEAK_GROUPS = [
         label: "My duties",
         description: "Shows recurring duties on the timetable",
       },
+      {
+        id: "dashboardRelief",
+        label: "Relief check",
+        description: "\"Check relief\" button on the dashboard timetable: opens Edval in a background tab on click, reads this week's relief, then closes it",
+      },
     ],
   },
   {

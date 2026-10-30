@@ -1494,3 +1494,37 @@ body.my-tweak-course-list .my-cl-reset {
   margin: 0 !important;
   transition: none !important;
 }
+
+/* Dashboard "Check relief" */
+.my-relief {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.my-relief__message {
+  margin-left: 0.75rem;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.my-relief__status {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.my-relief__item {
+  margin-top: 0.25rem;
+  padding: 0.35rem 0.6rem;
+  border-left: 4px solid rgb(30, 105, 128);
+  background: rgb(240, 246, 247);
+  font-size: 0.875rem;
+}
+
+.my-relief__item--covering {
+  border-left-color: #c77700;
+  background: #fff6e5;
+}
+
+.my-relief__item--today {
+  font-weight: 600;
+}

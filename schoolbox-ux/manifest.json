@@ -3,9 +3,14 @@
   "name": "Schoolbox UX Tweaks",
   "version": "1.2.7",
   "description": "Small UX improvements for staff using Schoolbox.",
-  "permissions": ["storage", "activeTab", "tabs"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
   "host_permissions": [
     "https://my.careywa.au/*",
+    "https://my.edval.education/*",
     "https://*.r2.cloudflarestorage.com/*"
   ],
   "background": {
@@ -21,15 +26,35 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://my.careywa.au/*"],
-      "js": ["main-world-bridge.js"],
+      "matches": [
+        "https://my.careywa.au/*"
+      ],
+      "js": [
+        "main-world-bridge.js"
+      ],
       "world": "MAIN",
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://my.careywa.au/*"],
-      "css": ["styles.css"],
-      "js": ["tweak-config.js", "content.js"],
+      "matches": [
+        "https://my.careywa.au/*"
+      ],
+      "css": [
+        "styles.css"
+      ],
+      "js": [
+        "tweak-config.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://my.edval.education/timetable*"
+      ],
+      "js": [
+        "edval-scrape.js"
+      ],
       "run_at": "document_idle"
     }
   ]

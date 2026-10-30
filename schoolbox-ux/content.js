@@ -35,6 +35,7 @@
     if (tweakToggles.classListColumnReorg) reorganiseClassListColumns();
     if (tweakToggles.classListStudentCount) updateClassListStudentCount();
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
+    if (tweakToggles.dashboardRelief) addReliefCheckToDashboard();
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
     if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
     if (tweakToggles.pastoralRecordHistoryPanel) addPastoralRecordHistoryPanel();
@@ -2153,6 +2154,143 @@
       });
 
       clearStaleSessionBanners(table, currentDutyIds);
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // Dashboard: "Check relief"
+  //
+  // A button under the timetable heading. On click the background
+  // worker opens Edval in an inactive tab, reads this week's relief
+  // (see edval-scrape.js), closes the tab and hands the result back.
+  // The last result is kept in chrome.storage.local and shown on page
+  // load (labelled with when it was checked), so nothing runs
+  // automatically - only the click fetches anything.
+  // ---------------------------------------------------------------
+
+  function reliefTimeLabel(ms) {
+    return new Date(ms)
+      .toLocaleTimeString("en-AU", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Australia/Perth",
+      })
+      .replace(" ", "")
+      .toLowerCase();
+  }
+
+  function reliefDayLabel(isoDate) {
+    const [y, m, d] = isoDate.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("en-AU", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
+  }
+
+  function localIsoDate(date) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  // Rebuilds the result area from a saved result. Only called from a
+  // click or the one-off initial load, never from the mutation
+  // observer, so it can't feed back into itself.
+  function renderReliefResult(box, data) {
+    const out = box.querySelector(".my-relief__result");
+    out.textContent = "";
+    if (!data) return;
+
+    const todayIso = localIsoDate(new Date());
+    const upcoming = data.items
+      .filter((item) => item.date >= todayIso)
+      .sort((a, b) => a.from - b.from);
+
+    const checked = new Date(data.checkedAt);
+    const checkedLabel =
+      localIsoDate(checked) === todayIso
+        ? `today ${reliefTimeLabel(data.checkedAt)}`
+        : `${reliefDayLabel(localIsoDate(checked))} ${reliefTimeLabel(data.checkedAt)}`;
+
+    const status = document.createElement("div");
+    status.className = "my-relief__status";
+    const relief = upcoming.filter((i) => i.kind === "covering").length;
+    const covered = upcoming.filter((i) => i.kind === "covered").length;
+    const parts = [];
+    parts.push(relief ? `${relief} relief lesson${relief === 1 ? "" : "s"}` : "No relief");
+    if (covered) parts.push(`${covered} of your lessons covered`);
+    status.textContent = `${parts.join(" · ")} this week (checked ${checkedLabel})`;
+    out.appendChild(status);
+
+    upcoming.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = `my-relief__item my-relief__item--${item.kind}`;
+      if (item.date === todayIso) row.classList.add("my-relief__item--today");
+
+      const other = item.otherName || item.otherCode;
+      const verb = item.kind === "covering" ? "covering for" : "covered by";
+      const room = item.room ? ` · ${item.room}` : "";
+      row.textContent =
+        `${reliefDayLabel(item.date)} · ${dutyPeriodLabel(item.periodKey)} ` +
+        `${reliefTimeLabel(item.from)}–${reliefTimeLabel(item.to)} · ` +
+        `${item.subject} ${item.classCode}${room} — ${verb} ${other}`;
+      out.appendChild(row);
+    });
+  }
+
+  function addReliefCheckToDashboard() {
+    if (!isDashboardPage()) return;
+
+    const header = document.querySelector("[data-timetable-header]");
+    if (!header) return;
+    const container = header.parentElement;
+    if (container.querySelector(".my-relief")) return;
+
+    const box = document.createElement("div");
+    box.className = "my-relief";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "my-quick-action-button my-quick-action-button--small";
+    button.textContent = "Check relief";
+
+    const message = document.createElement("span");
+    message.className = "my-relief__message";
+
+    const result = document.createElement("div");
+    result.className = "my-relief__result";
+
+    box.append(button, message, result);
+    header.after(box);
+
+    chrome.storage.local.get({ reliefResult: null }, (stored) => {
+      renderReliefResult(box, stored.reliefResult);
+    });
+
+    button.addEventListener("click", () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      message.textContent = "Checking Edval…";
+      chrome.runtime.sendMessage({ type: "CHECK_RELIEF" }, (response) => {
+        button.disabled = false;
+        if (chrome.runtime.lastError || !response) {
+          message.textContent = "Couldn't check relief - try again.";
+          return;
+        }
+        if (response.ok) {
+          message.textContent = "";
+          renderReliefResult(box, response.data);
+        } else if (response.error === "login") {
+          message.textContent =
+            "Edval wants you to sign in - open Edval once, sign in, then try again.";
+        } else if (response.error === "timeout") {
+          message.textContent = "Edval didn't finish loading - try again.";
+        } else {
+          console.warn("[my-relief] check failed:", response.error);
+          message.textContent = "Couldn't check relief - try again.";
+        }
+      });
     });
   }
 

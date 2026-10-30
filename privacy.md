@@ -8,11 +8,11 @@ what data the extension accesses, how it's used, and where it goes.
 
 ## What this extension does
 
-The extension runs only on the Schoolbox site it's built for. It
-rearranges, filters, and adds shortcuts to information that is
-already shown to the signed-in user on that site — it does not add
-any new data source or connect to any service beyond Schoolbox
-itself.
+The extension runs on the Schoolbox site it's built for, and — only
+when the user clicks "Check relief" on the dashboard — on the school's
+Edval timetable page (my.edval.education). It rearranges, filters, and
+adds shortcuts to information that is already shown to the signed-in
+user on those sites.
 
 ## What data it accesses
 
@@ -45,13 +45,20 @@ other purpose.
 - Does not sell or share data with anyone
 
 The only network requests the extension makes are to Schoolbox
-itself (to load pages the user is already viewing or navigating to)
-and to the storage host Schoolbox's own file-download links redirect
-to, in order to fetch an already-authorised file (such as a seating
-chart layout) on the user's behalf. No request is made to any other
-destination.
+itself (to load pages the user is already viewing or navigating to),
+to the storage host Schoolbox's own file-download links redirect to
+(to fetch an already-authorised file, such as a seating chart layout,
+on the user's behalf), and — only when the user clicks "Check relief"
+— to the school's Edval timetable page, which is opened in a
+background tab, read for the signed-in user's own relief lessons, and
+closed again. No request is made to any other destination.
 
 ## What is stored, and for how long
+
+The most recent "Check relief" result (the user's own relief lessons
+for the week, with the covering/covered teacher's name) is stored
+locally in the browser using `chrome.storage.local`, and is replaced
+the next time the user clicks the button.
 
 The extension stores its settings and preferences (such as the
 on/off toggle for its page modifications) locally, using Chrome's

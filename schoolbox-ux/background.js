@@ -53,6 +53,63 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
 
+  if (message.type === "CHECK_RELIEF") {
+    // Runs only when the user clicks "Check relief" on the dashboard.
+    // Opens Edval's timetable in an inactive tab, polls the passive
+    // edval-scrape.js content script until it reports a result (or the
+    // timeout hits), saves the result, and always closes the tab.
+    (async () => {
+      let tabId = null;
+      try {
+        const tab = await chrome.tabs.create({
+          url: "https://my.edval.education/timetable",
+          active: false,
+        });
+        tabId = tab.id;
+
+        const deadline = Date.now() + 25000;
+        let result = null;
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 800));
+          try {
+            const reply = await chrome.tabs.sendMessage(tabId, {
+              type: "SCRAPE_RELIEF",
+            });
+            if (reply && reply.status !== "loading") {
+              result = reply;
+              break;
+            }
+          } catch (e) {
+            // Content script not injected yet - keep polling.
+          }
+        }
+
+        if (!result) {
+          sendResponse({ ok: false, error: "timeout" });
+        } else if (result.status === "login") {
+          sendResponse({ ok: false, error: "login" });
+        } else {
+          const data = {
+            checkedAt: Date.now(),
+            items: result.items,
+            lessonCount: result.lessonCount,
+          };
+          await chrome.storage.local.set({ reliefResult: data });
+          sendResponse({ ok: true, data });
+        }
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      } finally {
+        if (tabId !== null) {
+          try {
+            await chrome.tabs.remove(tabId);
+          } catch (e) {}
+        }
+      }
+    })();
+    return true;
+  }
+
   if (message.type === "FETCH_TEXT") {
     (async () => {
       try {
