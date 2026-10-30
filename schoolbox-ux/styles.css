@@ -1469,6 +1469,10 @@ body.my-tweak-course-list .my-cl-reset {
   max-width: 6rem;
   opacity: 1;
   margin: 0 6px 0 4px;
+  /* Hover-intent delay: someone who already knows the icon clicks
+     before the label ever starts opening. Applies on the way in only;
+     closing is immediate (no delay on the base rule). */
+  transition-delay: 0.45s;
 }
 
 .my-search-action:hover,
