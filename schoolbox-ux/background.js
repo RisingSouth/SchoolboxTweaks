@@ -91,6 +91,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         } else {
           const data = {
             checkedAt: Date.now(),
+            forDate: result.forDate,
             items: result.items,
             lessonCount: result.lessonCount,
           };

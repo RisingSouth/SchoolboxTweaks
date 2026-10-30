@@ -56,9 +56,10 @@ closed again. No request is made to any other destination.
 ## What is stored, and for how long
 
 The most recent "Check relief" result (the user's own relief lessons
-for the week, with the covering/covered teacher's name) is stored
-locally in the browser using `chrome.storage.local`, and is replaced
-the next time the user clicks the button.
+for that day, with the covering/covered teacher's name) is stored
+locally in the browser using `chrome.storage.local`. It is replaced
+the next time the user clicks the button and deleted automatically
+once the day has passed.
 
 The extension stores its settings and preferences (such as the
 on/off toggle for its page modifications) locally, using Chrome's

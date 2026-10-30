@@ -51,9 +51,16 @@
       return { status: "loading" };
     }
 
+    // Today only (the page shows the whole week). Local date, matching
+    // the browser's own day - same as the dashboard uses.
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const todaysEvents = events.filter((el) => el.dataset.date === todayIso);
+
     const names = readNameMap();
     const items = [];
-    events.forEach((el) => {
+    todaysEvents.forEach((el) => {
       const d = el.dataset;
       if (d.event === "true" || !d.classCode || !d.coveringTeacherCode) return;
       if (d.teacherAbsence === "true") return;
@@ -71,7 +78,12 @@
       });
     });
 
-    return { status: "ok", items, lessonCount: events.length };
+    return {
+      status: "ok",
+      forDate: todayIso,
+      items,
+      lessonCount: todaysEvents.length,
+    };
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

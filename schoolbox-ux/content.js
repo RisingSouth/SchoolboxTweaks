@@ -2202,37 +2202,35 @@
     out.textContent = "";
     if (!data) return;
 
+    // Today only: a saved result for any other day is stale. It's
+    // cleared from storage when the button is built (see
+    // addReliefCheckToDashboard), this is just the belt-and-braces
+    // guard so an old result can never render.
     const todayIso = localIsoDate(new Date());
-    const upcoming = data.items
-      .filter((item) => item.date >= todayIso)
-      .sort((a, b) => a.from - b.from);
+    if (data.forDate !== todayIso) return;
 
-    const checked = new Date(data.checkedAt);
-    const checkedLabel =
-      localIsoDate(checked) === todayIso
-        ? `today ${reliefTimeLabel(data.checkedAt)}`
-        : `${reliefDayLabel(localIsoDate(checked))} ${reliefTimeLabel(data.checkedAt)}`;
+    const items = data.items
+      .filter((item) => item.date === todayIso)
+      .sort((a, b) => a.from - b.from);
 
     const status = document.createElement("div");
     status.className = "my-relief__status";
-    const relief = upcoming.filter((i) => i.kind === "covering").length;
-    const covered = upcoming.filter((i) => i.kind === "covered").length;
+    const relief = items.filter((i) => i.kind === "covering").length;
+    const covered = items.filter((i) => i.kind === "covered").length;
     const parts = [];
     parts.push(relief ? `${relief} relief lesson${relief === 1 ? "" : "s"}` : "No relief");
     if (covered) parts.push(`${covered} of your lessons covered`);
-    status.textContent = `${parts.join(" · ")} this week (checked ${checkedLabel})`;
+    status.textContent = `${parts.join(" · ")} today (checked ${reliefTimeLabel(data.checkedAt)})`;
     out.appendChild(status);
 
-    upcoming.forEach((item) => {
+    items.forEach((item) => {
       const row = document.createElement("div");
       row.className = `my-relief__item my-relief__item--${item.kind}`;
-      if (item.date === todayIso) row.classList.add("my-relief__item--today");
 
       const other = item.otherName || item.otherCode;
       const verb = item.kind === "covering" ? "covering for" : "covered by";
       const room = item.room ? ` · ${item.room}` : "";
       row.textContent =
-        `${reliefDayLabel(item.date)} · ` +
         `${reliefTimeLabel(item.from)}–${reliefTimeLabel(item.to)} · ` +
         `${item.subject} ${item.classCode}${room} — ${verb} ${other}`;
       out.appendChild(row);
@@ -2264,8 +2262,15 @@
     box.append(button, message, result);
     header.after(box);
 
+    // Reset every day: a result saved on an earlier day is deleted, not
+    // just hidden.
     chrome.storage.local.get({ reliefResult: null }, (stored) => {
-      renderReliefResult(box, stored.reliefResult);
+      const saved = stored.reliefResult;
+      if (saved && saved.forDate !== localIsoDate(new Date())) {
+        chrome.storage.local.remove("reliefResult");
+        return;
+      }
+      renderReliefResult(box, saved);
     });
 
     button.addEventListener("click", () => {
