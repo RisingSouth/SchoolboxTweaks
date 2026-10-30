@@ -1528,3 +1528,9 @@ body.my-tweak-course-list .my-cl-reset {
 .my-relief__item--today {
   font-weight: 600;
 }
+
+.my-relief__link {
+  margin-left: 0.75rem;
+  white-space: nowrap;
+  font-weight: 600;
+}

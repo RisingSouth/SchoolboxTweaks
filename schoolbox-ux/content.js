@@ -2233,6 +2233,19 @@
       row.textContent =
         `${reliefTimeLabel(item.from)}–${reliefTimeLabel(item.to)} · ` +
         `${item.subject} ${item.classCode}${room} — ${verb} ${other}`;
+
+      // Relief lessons get a plain link to the Veracross staff portal,
+      // where attendance for the covered class is taken. A normal
+      // link (no host permission, nothing fetched): opens in a new tab.
+      if (item.kind === "covering") {
+        const link = document.createElement("a");
+        link.className = "my-relief__link";
+        link.href = "https://portals.veracross.au/carey/faculty";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Attendance (Veracross)";
+        row.appendChild(link);
+      }
       out.appendChild(row);
     });
   }
