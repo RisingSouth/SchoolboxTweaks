@@ -2232,7 +2232,7 @@
       const verb = item.kind === "covering" ? "covering for" : "covered by";
       const room = item.room ? ` · ${item.room}` : "";
       row.textContent =
-        `${reliefDayLabel(item.date)} · ${dutyPeriodLabel(item.periodKey)} ` +
+        `${reliefDayLabel(item.date)} · ` +
         `${reliefTimeLabel(item.from)}–${reliefTimeLabel(item.to)} · ` +
         `${item.subject} ${item.classCode}${room} — ${verb} ${other}`;
       out.appendChild(row);

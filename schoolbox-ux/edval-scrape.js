@@ -24,7 +24,10 @@
     document.querySelectorAll("option[value]").forEach((opt) => {
       const code = opt.value;
       const text = opt.textContent.trim();
-      if (/^[A-Z]{3,}\d{2}$/.test(code) && text.includes(",")) {
+      // Any "Surname, First" entry with a value - no assumption about
+      // what the code itself looks like. Only looked up by the codes
+      // that appear on relief lessons, so extra entries are harmless.
+      if (code && /^[^,]+,\s*\S+/.test(text)) {
         names[code] = text;
       }
     });
