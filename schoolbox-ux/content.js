@@ -28,6 +28,7 @@
     if (tweakToggles.markbookShading) addAssessmentTypeShading();
     if (tweakToggles.markbookQuickLinks) addMarkbookQuickLinks();
     if (tweakToggles.classesGridQuickLinks) addQuickLinksOnClassesPage();
+    if (tweakToggles.searchStudentActions) addStudentActionsToSearchResults();
     if (tweakToggles.classListFlagFilter) addPastoralFlagFilter();
     if (tweakToggles.classListPmiBadge) addPmiBadges();
     if (tweakToggles.classListAttentionTags) addStudentAttentionTags();
@@ -941,6 +942,181 @@
 
       listItem.appendChild(bar);
     });
+  }
+
+  // Header search dropdown: adds a row of small icon buttons under each
+  // STUDENT result (add pastoral record, pastoral history, grades, due
+  // work, Veracross attendance today). Every Schoolbox link is built
+  // straight from the internal user id already in the result's own
+  // href (/search/user/{id}) - no network request needed for those.
+  //
+  // Design notes:
+  // - The result card is itself an <a>, and anchors can't nest, so the
+  //   row is inserted as the card's next SIBLING, not a child. That
+  //   also keeps us out of the card's own Vue-managed children.
+  // - Vue re-renders the dropdown as you type and may reuse a card
+  //   element for a different person, so the row records which id it
+  //   was built for (data-student-id) and is rebuilt on any mismatch
+  //   rather than assumed correct just because it exists.
+  // - Only results whose meta line ends in "Students" get the row -
+  //   parents and staff appear in the same list, and a pastoral link
+  //   for a parent would be broken or denied.
+  // - Attendance is a Veracross page keyed by the student's EXTERNAL
+  //   id, which isn't in the search result. It's looked up lazily on
+  //   click (one same-origin fetch of the profile page, then cached),
+  //   and the tab is opened via background.js since content scripts
+  //   can't call chrome.tabs.
+  const searchExternalIdCache = new Map();
+
+  function addStudentActionsToSearchResults() {
+    const results = document.querySelector(".sbx-header-search__results");
+    if (!results) return;
+
+    results.querySelectorAll('a.sbx-card[href^="/search/user/"]').forEach((card) => {
+      const idMatch = card.getAttribute("href").match(/^\/search\/user\/(\d+)$/);
+      const meta = card.querySelector(".meta");
+      const isStudent =
+        !!idMatch && !!meta && /students\s*$/i.test(meta.textContent.trim());
+
+      const next = card.nextElementSibling;
+      const existing =
+        next && next.classList.contains("my-search-actions") ? next : null;
+
+      if (!isStudent) {
+        if (existing) existing.remove();
+        return;
+      }
+      if (existing && existing.dataset.studentId === idMatch[1]) return;
+      if (existing) existing.remove();
+
+      const heading = card.querySelector("h3");
+      const name = heading ? heading.textContent.trim() : "student";
+      card.after(buildSearchActionRow(idMatch[1], name));
+    });
+  }
+
+  function buildSearchActionRow(studentId, name) {
+    const row = document.createElement("div");
+    row.className = "my-search-actions";
+    row.dataset.studentId = studentId;
+
+    const linkActions = [
+      {
+        icon: "add",
+        label: "Add pastoral record",
+        href: `/pastoral/student/${studentId}/record/insert`,
+      },
+      {
+        icon: "pastoral",
+        label: "Pastoral history",
+        href: `/pastoral/student/${studentId}`,
+      },
+      { icon: "approve", label: "Grades", href: `/learning/grades/${studentId}` },
+      { icon: "due-work", label: "Due work", href: `/learning/due/${studentId}` },
+    ];
+
+    const makeIcon = (iconName) => {
+      const icon = document.createElement("sbx-icon");
+      icon.setAttribute("name", iconName);
+      icon.setAttribute("size", "1rem");
+      icon.setAttribute("color", "currentColor");
+      return icon;
+    };
+
+    linkActions.forEach((action) => {
+      const link = document.createElement("a");
+      link.className = "my-search-action";
+      link.href = action.href;
+      link.title = `${action.label} - ${name}`;
+      link.setAttribute("aria-label", `${action.label} for ${name}`);
+      link.appendChild(makeIcon(action.icon));
+      row.appendChild(link);
+    });
+
+    const attendance = document.createElement("button");
+    attendance.type = "button";
+    attendance.className = "my-search-action";
+    attendance.title = `Attendance today (Veracross) - ${name}`;
+    attendance.setAttribute("aria-label", `Attendance today in Veracross for ${name}`);
+    attendance.appendChild(makeIcon("clipboard"));
+    // Keep focus in the search box on mousedown, so the dropdown
+    // doesn't get a chance to close on blur before click fires.
+    attendance.addEventListener("mousedown", (event) => event.preventDefault());
+    attendance.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openVeracrossAttendance(studentId, attendance, name);
+    });
+    row.appendChild(attendance);
+
+    return row;
+  }
+
+  // Pulls the student's external id (the number Veracross uses) out of
+  // the raw profile page. Both patterns are in server-rendered markup
+  // (an inline script's config object, and a plain hidden form field),
+  // not Vue output, so a background fetch() sees them. Digits-only
+  // capture, so the value is safe to put in a URL.
+  function extractExternalStudentId(html, internalId) {
+    const patterns = [
+      new RegExp(`student:\\s*\\{"id":${internalId},"externalId":"(\\d+)"`),
+      new RegExp(`name="studentExternalIds"\\s+value="(\\d+)"`),
+    ];
+    for (const pattern of patterns) {
+      const match = html.match(pattern);
+      if (match) return match[1];
+    }
+    return null;
+  }
+
+  function openVeracrossAttendance(internalId, button, name) {
+    if (button.classList.contains("my-search-action--busy")) return;
+
+    const open = (externalId) => {
+      chrome.runtime.sendMessage({
+        type: "OPEN_TAB",
+        url: `https://portals-app.veracross.au/carey/profile/${externalId}/today`,
+      });
+    };
+
+    if (searchExternalIdCache.has(internalId)) {
+      open(searchExternalIdCache.get(internalId));
+      return;
+    }
+
+    const fail = (reason) => {
+      console.warn(`[my-search] attendance lookup failed for ${internalId}:`, reason);
+      button.classList.add("my-search-action--error");
+      button.title = `Couldn't find the Veracross ID for ${name}`;
+      setTimeout(() => button.classList.remove("my-search-action--error"), 2500);
+    };
+
+    button.classList.add("my-search-action--busy");
+    fetch(`${location.origin}/search/user/${internalId}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.text();
+      })
+      .then((html) => {
+        const externalId = extractExternalStudentId(html, internalId);
+        // Logged on purpose until this has been confirmed on a few
+        // different students - safe to strip back to failure-only
+        // logging afterwards.
+        console.log(
+          `[my-search] internal ${internalId} -> external ${externalId}`
+        );
+        if (!externalId) {
+          fail("no external id found in profile HTML");
+          return;
+        }
+        searchExternalIdCache.set(internalId, externalId);
+        open(externalId);
+      })
+      .catch((err) => fail(err))
+      .finally(() => button.classList.remove("my-search-action--busy"));
   }
 
   // For each class box on the timetable, work out the class's real ID

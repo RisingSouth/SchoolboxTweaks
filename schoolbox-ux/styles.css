@@ -1395,3 +1395,44 @@ body.my-tweak-course-list .my-cl-reset {
   padding: 0;
 }
 
+
+/* Header search: student shortcut buttons under each student result.
+   Always visible but muted; accent colour on hover. */
+.my-search-actions {
+  display: flex;
+  gap: 4px;
+  padding: 4px 12px 8px;
+  border-bottom: 1px solid var(--sbx-color-border, #ededed);
+}
+
+.my-search-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #8a8f94;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.my-search-action:hover,
+.my-search-action:focus-visible {
+  color: var(--sbx-config-color-accent, rgb(30, 105, 128));
+  border-color: currentColor;
+  background: rgb(212, 229, 232);
+}
+
+.my-search-action--busy {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.my-search-action--error {
+  color: #b3261e;
+  border-color: #b3261e;
+}

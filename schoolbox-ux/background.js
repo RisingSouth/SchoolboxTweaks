@@ -34,6 +34,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
 
+  if (message.type === "OPEN_TAB") {
+    // Opens a URL in a new tab on the content script's behalf
+    // (content scripts can't call chrome.tabs). Only the Veracross
+    // portal is allowed - this isn't a general-purpose "open
+    // anything" relay.
+    try {
+      const url = new URL(message.url);
+      if (
+        url.protocol === "https:" &&
+        url.hostname === "portals-app.veracross.au"
+      ) {
+        chrome.tabs.create({ url: url.href });
+      }
+    } catch (e) {
+      // Malformed URL - ignore.
+    }
+    return false;
+  }
+
   if (message.type === "FETCH_TEXT") {
     (async () => {
       try {
