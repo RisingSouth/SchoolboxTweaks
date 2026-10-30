@@ -991,7 +991,13 @@
 
       const heading = card.querySelector("h3");
       const name = heading ? heading.textContent.trim() : "student";
-      card.after(buildSearchActionRow(idMatch[1], name));
+      const newRow = buildSearchActionRow(idMatch[1], name);
+      // Used to vertically centre the buttons on the card. Skipped if
+      // the dropdown isn't laid out yet (CSS falls back to a default).
+      if (card.offsetHeight > 0) {
+        newRow.style.setProperty("--my-card-h", `${card.offsetHeight}px`);
+      }
+      card.after(newRow);
     });
   }
 
@@ -999,6 +1005,15 @@
     const row = document.createElement("div");
     row.className = "my-search-actions";
     row.dataset.studentId = studentId;
+
+    // The row itself is a zero-height anchor sitting at the card's
+    // bottom edge; the buttons live in an absolutely-positioned inner
+    // box that floats up over the card's right-hand side, so they read
+    // as inline with the name without being nested inside the card's
+    // <a> (invalid) or inside Vue's own markup.
+    const inner = document.createElement("div");
+    inner.className = "my-search-actions__buttons";
+    row.appendChild(inner);
 
     const linkActions = [
       {
@@ -1030,7 +1045,7 @@
       link.title = `${action.label} - ${name}`;
       link.setAttribute("aria-label", `${action.label} for ${name}`);
       link.appendChild(makeIcon(action.icon));
-      row.appendChild(link);
+      inner.appendChild(link);
     });
 
     const attendance = document.createElement("button");
@@ -1047,7 +1062,7 @@
       event.stopPropagation();
       openVeracrossAttendance(studentId, attendance, name);
     });
-    row.appendChild(attendance);
+    inner.appendChild(attendance);
 
     return row;
   }

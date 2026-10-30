@@ -1396,13 +1396,26 @@ body.my-tweak-course-list .my-cl-reset {
 }
 
 
-/* Header search: student shortcut buttons under each student result.
-   Always visible but muted; accent colour on hover. */
+/* Header search: student shortcut buttons, floated over the right-hand
+   side of each student result card. The row is a zero-height anchor at
+   the card's bottom edge (so it adds no gap and shows no background);
+   the buttons box is lifted up by half the card height (--my-card-h,
+   set from JS) and centred on that point. */
 .my-search-actions {
+  position: relative;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  z-index: 1;
+}
+
+.my-search-actions__buttons {
+  position: absolute;
+  right: 8px;
+  top: calc(var(--my-card-h, 52px) / -2);
+  transform: translateY(-50%);
   display: flex;
-  gap: 4px;
-  padding: 4px 12px 8px;
-  border-bottom: 1px solid var(--sbx-color-border, #ededed);
+  gap: 2px;
 }
 
 .my-search-action {
@@ -1412,6 +1425,7 @@ body.my-tweak-course-list .my-cl-reset {
   width: 28px;
   height: 28px;
   padding: 0;
+  margin: 0;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
