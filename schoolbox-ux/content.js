@@ -44,6 +44,8 @@
 
     if (tweakToggles.courseListImprovements) initCourseListPage();
 
+    if (tweakToggles.gradesOverviewPanels) addGradesOverviewPanels();
+
     // Pure-CSS tweak (see styles.css) - toggled via a body class
     // rather than a call to skip, since there's no DOM to build.
     document.body.classList.toggle(
@@ -3807,6 +3809,117 @@
   // (pinned-first) is done with flex `order`, and our own hiding uses
   // a dedicated `my-cl-hidden` class so it can never collide with or
   // "undo" whatever the site's search box hides on its own.
+  // ---------------------------------------------------------------
+  // Marks overview (/learning/grades/{studentId}/{term}): one long
+  // page with every class's assessments expanded. Replaces it with a
+  // grid of panels (class, teacher, current average); clicking a panel
+  // reveals that class's own original list below the grid. The
+  // original <ul data-test="grades-subject"> elements are only hidden
+  // or shown, never rebuilt, so links and status markup stay intact.
+  // The single-class page (.../{term}/{classId}) and the year summary
+  // are different URLs and deliberately don't match.
+  // ---------------------------------------------------------------
+
+  function isGradesOverviewPage() {
+    return /^\/learning\/grades\/\d+\/\d{4}-\d+\/?$/.test(window.location.pathname);
+  }
+
+  function addGradesOverviewPanels() {
+    if (!isGradesOverviewPage()) return;
+    const lists = Array.from(
+      document.querySelectorAll('ul.activity-list[data-test="grades-subject"]')
+    );
+    if (!lists.length) return;
+    const parent = lists[0].parentElement;
+    if (!parent || parent.querySelector(".my-gp-grid")) return;
+
+    const now = Date.now();
+    const grid = document.createElement("div");
+    grid.className = "my-gp-grid";
+    const panels = [];
+
+    const select = (index) => {
+      panels.forEach((panel, i) => {
+        const on = i === index;
+        panel.classList.toggle("my-gp-panel--selected", on);
+        panel.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      lists.forEach((list, i) => list.classList.toggle("my-gp-hidden", i !== index));
+    };
+
+    lists.forEach((list, index) => {
+      const h3 = list.querySelector("h3");
+      const meta = h3 && h3.querySelector(".meta");
+      const code = meta ? meta.textContent.trim().replace(/[()]/g, "") : "";
+      const fullName = h3
+        ? Array.from(h3.childNodes)
+            .filter((n) => n.nodeType === Node.TEXT_NODE)
+            .map((n) => n.textContent)
+            .join("")
+            .trim()
+        : "Class";
+      // "HDC - Y10 - Computing" -> "Computing"
+      const name = fullName.replace(/^.*?-\s*Y\d+\w*\s*-\s*/, "") || fullName;
+
+      const gradeEl = list.querySelector(".subject-group .grade span");
+      const pct = gradeEl ? parseFloat(gradeEl.textContent) : NaN;
+
+      const teacherEl = list.querySelector(".actions-small-1 .compact.card p");
+      const teacher = teacherEl
+        ? teacherEl.childNodes[0].textContent.trim().replace(/^(Mr|Mrs|Ms|Miss|Dr)\.?\s+/, "")
+        : "";
+
+      // Flag unsubmitted work whose due date has passed. Only the
+      // machine-readable datetime is trusted, not the display text.
+      list.querySelectorAll("li.assessment").forEach((li) => {
+        if (li.querySelector(".my-gp-overdue")) return;
+        const light = li.querySelector("[data-assessment-status-light]");
+        if (!light || light.getAttribute("data-assessment-status-light") !== "incomplete") return;
+        const time = li.querySelector("time[datetime]");
+        if (!time || new Date(time.getAttribute("datetime")).getTime() >= now) return;
+        const tag = document.createElement("span");
+        tag.className = "my-gp-overdue";
+        tag.textContent = "Overdue";
+        const metaEl = li.querySelector(".pipe.meta");
+        if (metaEl) metaEl.parentElement.appendChild(tag);
+        li.classList.add("my-gp-row-overdue");
+      });
+
+      const panel = document.createElement("button");
+      panel.type = "button";
+      panel.className = "my-gp-panel";
+      panel.setAttribute("aria-pressed", "false");
+
+      const nameEl = document.createElement("p");
+      nameEl.className = "my-gp-name";
+      nameEl.textContent = name;
+      const subEl = document.createElement("p");
+      subEl.className = "my-gp-sub";
+      subEl.textContent = [teacher, code].filter(Boolean).join(" · ");
+      const pctEl = document.createElement("p");
+      pctEl.className = "my-gp-pct";
+      const bar = document.createElement("div");
+      bar.className = "my-gp-bar";
+      if (Number.isFinite(pct)) {
+        pctEl.textContent = Math.round(pct) + "%";
+        const fill = document.createElement("i");
+        fill.style.width = Math.max(0, Math.min(100, pct)) + "%";
+        bar.appendChild(fill);
+      } else {
+        pctEl.textContent = "No mark yet";
+        pctEl.classList.add("my-gp-pct--none");
+      }
+      panel.append(nameEl, subEl, pctEl, bar);
+      panel.addEventListener("click", () => select(index));
+      grid.appendChild(panel);
+      panels.push(panel);
+    });
+
+    parent.insertBefore(grid, lists[0]);
+    // Start with nothing selected: every class list hidden.
+    lists.forEach((list) => list.classList.add("my-gp-hidden"));
+  }
+
   // ---------------------------------------------------------------
 
   function isCourseListPage() {

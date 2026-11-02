@@ -127,6 +127,16 @@ const TWEAK_GROUPS = [
     ],
   },
   {
+    name: "Marks overview",
+    tweaks: [
+      {
+        id: "gradesOverviewPanels",
+        label: "Class panels",
+        description: "Shows each class's current average as a panel; click one to see its assessments",
+      },
+    ],
+  },
+  {
     name: "Course list",
     tweaks: [
       {
