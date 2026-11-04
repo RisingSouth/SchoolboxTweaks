@@ -37,6 +37,10 @@
   function scrape() {
     // Redirected away from the timetable (e.g. to a login page).
     if (!/^\/timetable/.test(location.pathname)) return { status: "login" };
+    // Sign-in form served on this same address.
+    if (document.querySelector("#loginForm, input[name='webCode']")) {
+      return { status: "login" };
+    }
 
     const events = Array.from(
       document.querySelectorAll(".timetableTimeGridEvent")

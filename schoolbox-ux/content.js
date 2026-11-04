@@ -2302,8 +2302,18 @@
           message.textContent = "";
           renderReliefResult(box, response.data);
         } else if (response.error === "login") {
-          message.textContent =
-            "Edval wants you to sign in - open Edval once, sign in, then try again.";
+          // "Edval isn't signed in. Click here to sign in, then try
+          // again." - built with DOM nodes, link opens Edval in a tab.
+          message.textContent = "Edval isn't signed in. ";
+          const signIn = document.createElement("a");
+          signIn.href = "https://my.edval.education/timetable";
+          signIn.target = "_blank";
+          signIn.rel = "noopener noreferrer";
+          signIn.textContent = "Click here to sign in";
+          message.appendChild(signIn);
+          message.appendChild(
+            document.createTextNode(" (tick \"Stay signed in\"), then try again.")
+          );
         } else if (response.error === "timeout") {
           message.textContent = "Edval didn't finish loading - try again.";
         } else {

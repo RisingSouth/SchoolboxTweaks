@@ -71,6 +71,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         let result = null;
         while (Date.now() < deadline) {
           await new Promise((r) => setTimeout(r, 800));
+
+          // Signed-out visitors get redirected away from /timetable
+          // (to Edval's sign-in page), where the scraper script never
+          // loads. Catch that straight away instead of waiting out the
+          // timeout. (Reading tab.url needs the Edval host permission,
+          // which the extension has.)
+          try {
+            const current = await chrome.tabs.get(tabId);
+            if (current.url) {
+              const u = new URL(current.url);
+              if (
+                u.hostname === "my.edval.education" &&
+                !u.pathname.startsWith("/timetable")
+              ) {
+                result = { status: "login" };
+                break;
+              }
+            }
+          } catch (e) {}
+
           try {
             const reply = await chrome.tabs.sendMessage(tabId, {
               type: "SCRAPE_RELIEF",
