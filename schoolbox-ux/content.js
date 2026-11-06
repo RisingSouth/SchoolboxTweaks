@@ -251,7 +251,7 @@
 
       const footer = document.createElement("div");
       footer.className = "my-nav-panel-footer";
-      footer.textContent = "v1.2.7";
+      footer.textContent = "v1.2.8";
       panel.appendChild(footer);
 
       document.body.appendChild(panel);
@@ -4128,12 +4128,14 @@
   // reveals that class's own original list below the grid. The
   // original <ul data-test="grades-subject"> elements are only hidden
   // or shown, never rebuilt, so links and status markup stay intact.
-  // The single-class page (.../{term}/{classId}) and the year summary
-  // are different URLs and deliberately don't match.
+  // The term segment is optional: the student-search Grades button links
+  // to /learning/grades/{studentId}, which shows the current term without
+  // adding it to the URL. The single-class page (.../{term}/{classId})
+  // deliberately doesn't match.
   // ---------------------------------------------------------------
 
   function isGradesOverviewPage() {
-    return /^\/learning\/grades\/\d+\/\d{4}-\d+\/?$/.test(window.location.pathname);
+    return /^\/learning\/grades\/\d+(\/\d{4}-\d+)?\/?$/.test(window.location.pathname);
   }
 
   function addGradesOverviewPanels() {
