@@ -134,6 +134,11 @@ const TWEAK_GROUPS = [
         label: "Export student list (CSV)",
         description: "Adds an Export CSV button to the class list for downloading names and emails.",
       },
+      {
+        id: "classListGmailCompose",
+        label: "Open students in Gmail",
+        description: "Adds an \"Open students in Gmail\" button to the Compose Email dialog (students only, in BCC)",
+      },
     ],
   },
   {

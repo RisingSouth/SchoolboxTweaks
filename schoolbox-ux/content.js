@@ -48,6 +48,7 @@
     if (tweakToggles.classListColumnReorg) reorganiseClassListColumns();
     if (tweakToggles.classListStudentCount) updateClassListStudentCount();
     if (tweakToggles.classListExportCsv) addClassListCsvExport();
+    if (tweakToggles.classListGmailCompose) addGmailComposeToClassListModal();
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
     if (tweakToggles.dashboardRelief) addReliefCheckToDashboard();
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
@@ -2184,6 +2185,87 @@
 
     item.appendChild(button);
     toolbar.appendChild(item);
+  }
+
+  // ---------------------------------------------------------------
+  // Class List: "Open in Gmail" inside the Compose Email modal.
+  //
+  // Schoolbox's own "Compose Email" submit button is left untouched;
+  // this adds a second button beside it. The modal's hidden
+  // #studentExternalIds field lists exactly the students Schoolbox
+  // is about to compose for, so each id is matched to its table row
+  // (the "(103975)" number next to the name) to find that student's
+  // email - no guessing about which rows are ticked.
+  //
+  // Students only: parent and Head of House addresses are resolved
+  // server-side by Schoolbox and never appear on the page, so Gmail
+  // can't offer those options.
+  // ---------------------------------------------------------------
+  function buildGmailComposeUrl() {
+    const idsInput = document.querySelector("#classList-email #studentExternalIds");
+    if (!idsInput || !idsInput.value) return { url: "", count: 0 };
+    const wanted = new Set(
+      idsInput.value.split(",").map((id) => id.trim()).filter(Boolean)
+    );
+
+    const emails = [];
+    document
+      .querySelectorAll("#contact-table tbody tr")
+      .forEach((row) => {
+        if (row.classList.contains("sub-row")) return;
+        const student = extractCsvStudent(row);
+        if (student.id && student.email && wanted.has(student.id)) {
+          emails.push(student.email);
+        }
+      });
+    if (!emails.length) return { url: "", count: 0 };
+
+    // BCC so students don't see each other's addresses.
+    const url =
+      "https://mail.google.com/mail/?view=cm&fs=1&bcc=" +
+      encodeURIComponent(emails.join(","));
+    return { url, count: emails.length };
+  }
+
+  function addGmailComposeToClassListModal() {
+    if (!isClassListPage()) return;
+    const form = document.querySelector("#classList-email form.class-list-form");
+    if (!form) return;
+    if (form.querySelector(".my-gmail-compose-button")) return;
+
+    const submit = form.querySelector('button[type="submit"]');
+    if (!submit) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "my-gmail-compose";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button my-gmail-compose-button";
+    button.textContent = "Open students in Gmail";
+    button.addEventListener("click", () => {
+      const { url, count } = buildGmailComposeUrl();
+      if (!count) {
+        hint.textContent = "No student emails found for this selection.";
+        return;
+      }
+      // Gmail drops very long compose URLs; stay well under the limit.
+      if (url.length > 7000) {
+        hint.textContent =
+          "Too many students for one Gmail link - tick fewer, or use Compose Email.";
+        return;
+      }
+      window.open(url, "_blank", "noopener");
+    });
+
+    const hint = document.createElement("div");
+    hint.className = "my-gmail-compose-hint";
+    hint.textContent =
+      "Gmail covers the students only (in BCC). For parents or Head of House, use Compose Email.";
+
+    wrap.appendChild(button);
+    wrap.appendChild(hint);
+    submit.insertAdjacentElement("afterend", wrap);
   }
 
   // YM/HOY issues are logged as two separate flags - "Given" and

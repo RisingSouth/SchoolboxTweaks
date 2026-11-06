@@ -561,6 +561,23 @@ td[data-pop-out-menu="true"]:hover .my-mb-quicklink--cell,
   cursor: not-allowed;
 }
 
+/* "Open students in Gmail" button inside the Compose Email modal. */
+.my-gmail-compose {
+  margin-top: 12px;
+}
+
+.my-gmail-compose-button {
+  background: transparent;
+  color: rgb(30, 105, 128);
+  border: 1.5px solid rgb(30, 105, 128);
+}
+
+.my-gmail-compose-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
 /*
   Same red Schoolbox itself uses for alert-type flags/icons
   (--sbx-color-alert, #fa4a47 fallback), so this reads as consistent
