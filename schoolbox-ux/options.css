@@ -184,3 +184,77 @@ body {
   background: #bbb;
   cursor: default;
 }
+
+/* Grade scales card: full width under the tweak cards. */
+.grade-card {
+  margin-top: 16px;
+}
+
+.grade-table {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.grade-row {
+  display: grid;
+  grid-template-columns: 110px repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+
+.grade-row--head {
+  font-size: 12px;
+  font-weight: 600;
+  color: #777;
+  text-align: center;
+}
+
+.grade-scale-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.grade-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid #d0d0cc;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.grade-input.is-invalid {
+  border-color: #c0392b;
+  background: #fdf1f0;
+}
+
+.grade-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.grade-error {
+  font-size: 12px;
+  color: #c0392b;
+}
+
+.grade-reset {
+  margin-left: auto;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid #d0d0cc;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.grade-reset:hover:not(:disabled) {
+  background: #f4f4f2;
+}

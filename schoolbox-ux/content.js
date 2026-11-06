@@ -11,6 +11,13 @@
   // toggles existed.
   let tweakToggles = buildDefaultTweakToggles();
 
+  // Markbook "Grade" column settings, also populated from storage
+  // before applyTweaks() first runs: the per-scale cutoffs (edited on
+  // the Options page) and a { [classId]: scaleId } map of the scale a
+  // user manually picked for a class, overriding the auto-detected one.
+  let gradeCutoffs = mergeGradeCutoffsWithDefaults(null);
+  let gradeScaleOverrides = {};
+
   // Each tweak's own top-level call is gated here, in one place,
   // rather than inside each function - a single choke point is much
   // harder to let drift out of sync with tweak-config.js than
@@ -24,6 +31,9 @@
     if (tweakToggles.classHomeSeat) addSeatWidgetOnClassHomepage();
     if (tweakToggles.markbookHeading) hideRedundantHeading();
     if (tweakToggles.markbookFilters) addFilterToggleOnMarkbook();
+    // Must run before the sort/shading/quick-links tweaks below: it
+    // inserts a column, which shifts every column index after it.
+    if (tweakToggles.markbookGradeColumn) addMarkbookGradeColumn();
     if (tweakToggles.markbookSort) addSortableMarkbookColumns();
     if (tweakToggles.markbookShading) addAssessmentTypeShading();
     if (tweakToggles.markbookQuickLinks) addMarkbookQuickLinks();
@@ -241,7 +251,7 @@
 
       const footer = document.createElement("div");
       footer.className = "my-nav-panel-footer";
-      footer.textContent = "v1.2.6";
+      footer.textContent = "v1.2.7";
       panel.appendChild(footer);
 
       document.body.appendChild(panel);
@@ -337,7 +347,17 @@
 
       th.classList.add("my-sortable-header");
       th.addEventListener("click", () => {
-        sortMarkbookByColumn(tbody, index, th, headers);
+        // The column index is looked up at click time rather than
+        // captured here: the Grade column tweak inserts a column, and
+        // a captured index would go stale if it landed after this ran.
+        const liveHeaders = Array.from(headerRow.children);
+        // The Grade column has no sortable text of its own (a letter),
+        // so it sorts by the weighted average column beside it.
+        const sortIndex = th.dataset.mySortColumn
+          ? Number(th.dataset.mySortColumn)
+          : liveHeaders.indexOf(th);
+        if (sortIndex < 0) return;
+        sortMarkbookByColumn(tbody, sortIndex, th, liveHeaders);
       });
     });
   }
@@ -388,6 +408,272 @@
 
     const number = trimmed.match(/-?\d+(?:\.\d+)?/);
     return number ? parseFloat(number[0]) : null;
+  }
+
+  // ---------------------------------------------------------------
+  // Markbook "Grade" column: an indicative A-E letter beside each
+  // student's weighted average (and the class average), worked out
+  // from the cutoffs in tweak-config.js / the Options page. It's an
+  // indicator, not the reported grade - the header tooltip says so.
+  // ---------------------------------------------------------------
+
+  const GRADE_COLUMN_TOOLTIP =
+    "Indicative grade from the weighted average. Not the official reported grade.";
+
+  // The class link in the breadcrumb ("HDC - Y11 - Computer Science
+  // ATAR" -> /homepage/5960) - the one place the class name reliably
+  // lives, since the page's own heading is hidden by another tweak.
+  function getMarkbookClassLink() {
+    return document.querySelector('ul.breadcrumb a[href^="/homepage/"]');
+  }
+
+  function getMarkbookClassId() {
+    const fromPath = window.location.pathname.match(
+      /\/learning\/markbook\/class\/(\d+)/
+    );
+    if (fromPath) return fromPath[1];
+
+    const link = getMarkbookClassLink();
+    const fromLink = link && (link.getAttribute("href") || "").match(/\/homepage\/(\d+)/);
+    return fromLink ? fromLink[1] : null;
+  }
+
+  // "Y11" / "Y08" / "Year 9" in the class name -> a scale id. Years
+  // 10-12 share one scale; anything else (or no match) is null, which
+  // means "ask the user" rather than guessing.
+  function detectGradeScaleFromClassName() {
+    const link = getMarkbookClassLink();
+    if (!link) return null;
+
+    const match = link.textContent.match(/\bY(?:ear)?\s*0?(\d{1,2})\b/i);
+    if (!match) return null;
+
+    const year = parseInt(match[1], 10);
+    if (year >= 7 && year <= 9) return String(year);
+    if (year >= 10 && year <= 12) return "10";
+    return null;
+  }
+
+  function isKnownGradeScale(id) {
+    return GRADE_SCALES.some((scale) => scale.id === id);
+  }
+
+  // Which scale applies right now: the user's saved pick for this
+  // class if there is one, else the auto-detected one, else none.
+  function getGradeScaleState() {
+    const classId = getMarkbookClassId() || "_";
+    const detected = detectGradeScaleFromClassName();
+    const saved = gradeScaleOverrides[classId];
+    const override = isKnownGradeScale(saved) ? saved : null;
+    return { classId, detected, override, active: override || detected };
+  }
+
+  function gradeScaleLabel(id) {
+    const scale = GRADE_SCALES.find((s) => s.id === id);
+    return scale ? scale.label : "";
+  }
+
+  // Short form of a scale for the "(auto)" option: "Y11" for the one
+  // class year we actually detected, falling back to the scale label.
+  function detectedYearLabel() {
+    const link = getMarkbookClassLink();
+    const match = link && link.textContent.match(/\bY(?:ear)?\s*0?(\d{1,2})\b/i);
+    return match ? `Y${parseInt(match[1], 10)}` : "";
+  }
+
+  // Inserts a Grade cell into every row of the Markbook table (so
+  // every column stays aligned), fills the letter pills, and keeps
+  // the scale dropdown in the toolbar. Safe to call repeatedly: each
+  // row is checked for its own grade cell first, because Vue can
+  // re-render rows and quietly drop anything we injected into them.
+  function addMarkbookGradeColumn() {
+    if (!isMarkbookPage()) return;
+
+    const table = document.querySelector(".diagonal-headings-table");
+    if (!table) return;
+
+    const headerRow = table.querySelector("tr.rotate-headers");
+    if (!headerRow || headerRow.children.length < 3) return;
+
+    // Only proceed on the layout we've actually seen: the second
+    // column is the weighted average. Anything else (a school with
+    // different columns) is left completely alone rather than
+    // getting a column in the wrong place.
+    if (!/weighted\s+average/i.test(headerRow.children[1].textContent)) return;
+
+    Array.from(table.querySelectorAll("tr")).forEach((row) => {
+      if (row.classList.contains("my-mb-actions-row")) {
+        widenActionsRowLead(row);
+        return;
+      }
+      if (row.querySelector(":scope > [data-my-grade-cell]")) return;
+      if (row.children.length < 3) return;
+      insertGradeCell(row);
+    });
+
+    updateGradeCells(table);
+    ensureGradeScaleSelector();
+  }
+
+  // The "Go to marking" row's first cell spans the lead columns. If it
+  // was built before the Grade column existed it spans one too few.
+  function widenActionsRowLead(row) {
+    const lead = row.querySelector(".my-mb-actions-lead");
+    if (!lead) return;
+    const built = Number(lead.dataset.myLeadCount || 3);
+    if (built < 4) {
+      lead.colSpan = built + 1;
+      lead.dataset.myLeadCount = String(built + 1);
+    }
+  }
+
+  // Which kind of cell this row's Grade cell should be.
+  function gradeCellKindForRow(row) {
+    if (row.classList.contains("rotate-headers")) return "head";
+    if (row.classList.contains("average-headers")) return "average";
+    const first = row.children[0];
+    if (
+      first &&
+      first.classList.contains("profile-cell") &&
+      row.parentElement &&
+      row.parentElement.tagName === "TBODY" &&
+      !row.classList.contains("sub-row")
+    ) {
+      return "student";
+    }
+    return "blank";
+  }
+
+  function insertGradeCell(row) {
+    const kind = gradeCellKindForRow(row);
+    const neighbour = row.children[2];
+
+    let cell;
+    if (kind === "head") {
+      // Same div > span shape as the neighbouring "Class Ranking"
+      // header, so Schoolbox's own header styling applies to it too.
+      cell = document.createElement("th");
+      cell.className = "markbook-faded my-grade-col my-grade-head";
+      cell.title = GRADE_COLUMN_TOOLTIP;
+      // No sortable text of its own - sorts by the weighted average
+      // (column 1) instead. See addSortableMarkbookColumns().
+      cell.dataset.mySortColumn = "1";
+      const inner = document.createElement("div");
+      const label = document.createElement("span");
+      label.textContent = "Grade";
+      inner.appendChild(label);
+      cell.appendChild(inner);
+    } else {
+      // Match whatever sits where the new cell is going (th vs td,
+      // and its background class) so it blends into its row.
+      cell = document.createElement(neighbour.tagName.toLowerCase());
+      const inherited = Array.from(neighbour.classList).filter(
+        (cls) => !cls.startsWith("my-")
+      );
+      cell.className = inherited.concat("my-grade-col").join(" ");
+    }
+
+    cell.dataset.myGradeCell = "";
+    cell.dataset.myGradeKind = kind;
+    row.insertBefore(cell, neighbour);
+  }
+
+  // Fills in (or refreshes) the pill in every student / average cell.
+  // Each cell remembers what it last rendered so an unchanged value
+  // isn't touched again - this runs on every DOM mutation.
+  function updateGradeCells(table) {
+    const state = getGradeScaleState();
+    const cutoffs = state.active ? gradeCutoffs[state.active] : null;
+
+    table.querySelectorAll("[data-my-grade-cell]").forEach((cell) => {
+      const kind = cell.dataset.myGradeKind;
+      if (kind !== "student" && kind !== "average") return;
+
+      const valueCell = cell.previousElementSibling;
+      const value = valueCell ? parseMarkbookCellValue(valueCell.textContent) : null;
+      const letter = cutoffs ? gradeLetterForValue(value, cutoffs) : "";
+
+      const signature = `${letter}|${state.active || ""}`;
+      if (cell.dataset.myGradeSig === signature) return;
+      cell.dataset.myGradeSig = signature;
+
+      cell.textContent = "";
+      if (!letter) return;
+
+      const pill = document.createElement("span");
+      pill.className = `my-grade-pill my-grade-pill--${letter}`;
+      pill.textContent = letter;
+      pill.title = `Indicative grade (${gradeScaleLabel(state.active)} scale). Not the official reported grade.`;
+      cell.appendChild(pill);
+    });
+  }
+
+  // "Grade scale: [Y11 (auto) v]" in the toolbar row beside Filters.
+  // The toolbar is rendered late by Vue, so if it isn't there yet this
+  // just waits for a later pass.
+  function ensureGradeScaleSelector() {
+    if (document.querySelector(".my-grade-scale-wrap")) return;
+
+    const legend = document.querySelector(".legend");
+    const toolbarRow = legend ? legend.parentElement : null;
+    if (!toolbarRow) return;
+
+    const state = getGradeScaleState();
+
+    const wrap = document.createElement("span");
+    wrap.className = "my-grade-scale-wrap";
+
+    const label = document.createElement("label");
+    label.textContent = "Grade scale";
+
+    const select = document.createElement("select");
+    select.className = "my-grade-scale";
+    select.title = GRADE_COLUMN_TOOLTIP;
+
+    // The empty value means "use the auto-detected scale" - or, when
+    // nothing could be detected, "nothing chosen yet".
+    const autoOption = document.createElement("option");
+    autoOption.value = "";
+    const yearLabel = detectedYearLabel();
+    autoOption.textContent = state.detected
+      ? `${yearLabel || gradeScaleLabel(state.detected)} (auto)`
+      : "Choose…";
+    select.appendChild(autoOption);
+
+    GRADE_SCALES.forEach((scale) => {
+      const option = document.createElement("option");
+      option.value = scale.id;
+      option.textContent = `${scale.label} scale`;
+      select.appendChild(option);
+    });
+
+    select.value = state.override || "";
+    wrap.classList.toggle("my-grade-scale-wrap--needed", !state.active);
+
+    select.addEventListener("change", () => {
+      const current = getGradeScaleState();
+      if (select.value) {
+        gradeScaleOverrides[current.classId] = select.value;
+      } else {
+        delete gradeScaleOverrides[current.classId];
+      }
+      chrome.storage.sync.set({ gradeScaleOverrides });
+
+      wrap.classList.toggle("my-grade-scale-wrap--needed", !getGradeScaleState().active);
+      const table = document.querySelector(".diagonal-headings-table");
+      if (table) updateGradeCells(table);
+    });
+
+    wrap.appendChild(label);
+    wrap.appendChild(select);
+
+    // Right after the Filters button if that tweak put one there.
+    const filtersButton = toolbarRow.querySelector(".my-filter-toggle");
+    if (filtersButton && filtersButton.parentElement === toolbarRow) {
+      filtersButton.insertAdjacentElement("afterend", wrap);
+    } else {
+      toolbarRow.insertBefore(wrap, toolbarRow.firstChild);
+    }
   }
 
   // Shades each assessment-type bucket's own column (e.g. "Project",
@@ -539,29 +825,45 @@
     if (!courseHeadersRow || !rotateHeadersRow || !averageHeadersRow) return;
 
     const columns = Array.from(rotateHeadersRow.children);
-    const leadCells = Array.from(courseHeadersRow.children).slice(0, 3);
-    if (columns.length < 3 || leadCells.length < 3) return;
+
+    // Student / average / (grade, when that tweak has added it) / rank
+    // all sit before the first assessment column. Counted from the
+    // real header row instead of assumed to be 3, so this still lines
+    // up whether or not the Grade column is present.
+    const firstAssessmentIndex = columns.findIndex((th) =>
+      th.matches('[data-test^="markbook-assessment-"]')
+    );
+    const leadCount = firstAssessmentIndex > 0 ? firstAssessmentIndex : 3;
+
+    const leadCells = Array.from(courseHeadersRow.children).slice(0, leadCount);
+    if (columns.length < leadCount || leadCells.length < leadCount) return;
 
     const row = document.createElement("tr");
     row.className = "my-mb-actions-row";
 
-    // Student / average / rank are merged into one labelled cell -
-    // copy their classes across so any sticky-left column behaviour
-    // those three th's rely on still applies to the merged one.
+    // The lead columns are merged into one labelled cell - copy their
+    // classes across so any sticky-left column behaviour those th's
+    // rely on still applies to the merged one.
     const leadClasses = new Set();
     leadCells.forEach((cell) =>
-      cell.classList.forEach((cls) => leadClasses.add(cls))
+      cell.classList.forEach((cls) => {
+        // Skip our own marker classes (e.g. from the Grade column).
+        if (!cls.startsWith("my-")) leadClasses.add(cls);
+      })
     );
 
     const leadTh = document.createElement("th");
-    leadTh.colSpan = 3;
+    leadTh.colSpan = leadCount;
+    // Remembered so the Grade column tweak can widen this cell by one
+    // if it adds its column after this row was already built.
+    leadTh.dataset.myLeadCount = String(leadCount);
     leadTh.className = Array.from(leadClasses)
       .concat("my-mb-actions-lead")
       .join(" ");
     leadTh.textContent = "Go to marking →";
     row.appendChild(leadTh);
 
-    for (let i = 3; i < columns.length; i++) {
+    for (let i = leadCount; i < columns.length; i++) {
       const th = document.createElement("th");
 
       const match = (columns[i].dataset.test || "").match(
@@ -4835,12 +5137,20 @@
   // disabled extension leaves the rest of the page completely
   // untouched.
   chrome.storage.sync.get(
-    { tweaksEnabled: true, tweakToggles: {}, pastoralPanelAlwaysOpen: false },
+    {
+      tweaksEnabled: true,
+      tweakToggles: {},
+      pastoralPanelAlwaysOpen: false,
+      gradeCutoffs: {},
+      gradeScaleOverrides: {},
+    },
     (result) => {
       if (!result.tweaksEnabled) return;
 
       tweakToggles = mergeTweakTogglesWithDefaults(result.tweakToggles);
       pastoralPanelAlwaysOpen = result.pastoralPanelAlwaysOpen;
+      gradeCutoffs = mergeGradeCutoffsWithDefaults(result.gradeCutoffs);
+      gradeScaleOverrides = result.gradeScaleOverrides || {};
 
       // Run once on load.
       applyTweaks();

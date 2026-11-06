@@ -94,6 +94,11 @@ const TWEAK_GROUPS = [
         label: "Quick links",
         description: "Mark-all and open-response shortcuts on gradable columns",
       },
+      {
+        id: "markbookGradeColumn",
+        label: "Grade column",
+        description: "Adds an indicative A-E grade next to each student's weighted average (cutoffs are editable below)",
+      },
     ],
   },
   {
@@ -202,4 +207,69 @@ function buildDefaultTweakToggles() {
 // inside an object that's already there.
 function mergeTweakTogglesWithDefaults(stored) {
   return Object.assign(buildDefaultTweakToggles(), stored || {});
+}
+
+// ---------------------------------------------------------------
+// Grade scales for the Markbook "Grade" column.
+//
+// Cutoffs are [A, B, C, D] - a weighted average at or above a
+// cutoff earns that letter, anything below the D cutoff is an E.
+// These are the SEQTA (".5") values: Schoolbox shows the weighted
+// average to 2 decimals, so comparing the displayed number against
+// a ".5" cutoff matches "round first, then compare".
+//
+// Shared by content.js (the column itself) and options.js (the
+// editable cutoffs card) for the same reason TWEAK_GROUPS is: one
+// definition, so the two can't drift apart.
+// ---------------------------------------------------------------
+const GRADE_SCALES = [
+  { id: "7", label: "Year 7" },
+  { id: "8", label: "Year 8" },
+  { id: "9", label: "Year 9" },
+  { id: "10", label: "Year 10-12" },
+];
+
+const GRADE_LETTERS = ["A", "B", "C", "D", "E"];
+
+const DEFAULT_GRADE_CUTOFFS = {
+  "7": [79.5, 69.5, 49.5, 34.5],
+  "8": [77.5, 67.5, 49.5, 34.5],
+  "9": [75.5, 65.5, 49.5, 34.5],
+  "10": [74.5, 64.5, 49.5, 34.5],
+};
+
+// True for exactly four finite numbers in 0-100, strictly
+// descending (A > B > C > D). Used both when merging stored values
+// (so a corrupted/hand-edited value falls back to the default
+// rather than producing nonsense grades) and by the options page's
+// own validation.
+function isValidGradeCutoffs(cutoffs) {
+  if (!Array.isArray(cutoffs) || cutoffs.length !== 4) return false;
+  if (!cutoffs.every((n) => typeof n === "number" && isFinite(n) && n >= 0 && n <= 100)) {
+    return false;
+  }
+  return cutoffs[0] > cutoffs[1] && cutoffs[1] > cutoffs[2] && cutoffs[2] > cutoffs[3];
+}
+
+// Merges stored cutoffs over the defaults, one scale at a time - a
+// scale that's missing or invalid in storage falls back to its own
+// default instead of discarding the whole object.
+function mergeGradeCutoffsWithDefaults(stored) {
+  const merged = {};
+  Object.keys(DEFAULT_GRADE_CUTOFFS).forEach((id) => {
+    const candidate = stored && stored[id];
+    merged[id] = isValidGradeCutoffs(candidate)
+      ? candidate.slice()
+      : DEFAULT_GRADE_CUTOFFS[id].slice();
+  });
+  return merged;
+}
+
+// Letter for a weighted average (a number), or "" if it isn't one.
+function gradeLetterForValue(value, cutoffs) {
+  if (typeof value !== "number" || !isFinite(value)) return "";
+  for (let i = 0; i < 4; i++) {
+    if (value >= cutoffs[i]) return GRADE_LETTERS[i];
+  }
+  return GRADE_LETTERS[4];
 }

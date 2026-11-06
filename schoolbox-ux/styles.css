@@ -1610,3 +1610,64 @@ body.my-tweak-course-list .my-cl-reset {
   color: #fff;
 }
 .my-gp-row-overdue { box-shadow: inset 3px 0 0 var(--color-alert, #c0392b); }
+
+/*
+  Markbook "Grade" column (markbookGradeColumn tweak). Only ever
+  applies to elements content.js itself injected, so there's nothing
+  here that can affect a page with the tweak switched off.
+*/
+.my-grade-col {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.my-grade-pill {
+  display: inline-block;
+  min-width: 24px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+  cursor: default;
+}
+
+/* Dark text on a light tint of the same hue, so each letter stays
+   readable on Schoolbox's white and grey cells alike. */
+.my-grade-pill--A { background: #d9efd2; color: #1f5a14; }
+.my-grade-pill--B { background: #d6e7f7; color: #154a7a; }
+.my-grade-pill--C { background: #fbe8c4; color: #7a4d06; }
+.my-grade-pill--D { background: #e4e4e0; color: #444444; }
+.my-grade-pill--E { background: #f8d4d4; color: #8a1f1f; }
+
+/* "Grade scale: [Y11 (auto) v]" in the Markbook toolbar, beside the
+   Filters button. Schoolbox's global select styling stretches a
+   <select> to full width, hence the explicit overrides. */
+.my-grade-scale-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px 10px;
+  font-size: 0.9em;
+  vertical-align: top;
+}
+
+.my-grade-scale-wrap label {
+  margin: 0;
+  color: #555;
+}
+
+.my-grade-scale-wrap select.my-grade-scale {
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 5px 26px 5px 8px;
+  font-size: 1em;
+}
+
+/* No scale could be worked out from the class name and none has been
+   picked yet - no grades show until one is, so draw the eye to it. */
+.my-grade-scale-wrap--needed select.my-grade-scale {
+  border-color: #c0392b;
+}
