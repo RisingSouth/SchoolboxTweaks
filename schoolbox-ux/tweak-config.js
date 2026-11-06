@@ -32,7 +32,7 @@ const TWEAK_GROUPS = [
       {
         id: "searchStudentActions",
         label: "Student shortcuts in search",
-        description: "Icon buttons on student search results: add pastoral record, pastoral history, grades, due work, timetable, Veracross attendance",
+        description: "Icon buttons on student search results (header dropdown and full results page): add pastoral record, pastoral history, grades, due work, timetable, Veracross attendance",
       },
     ],
   },

@@ -1418,6 +1418,22 @@ body.my-tweak-course-list .my-cl-reset {
   gap: 2px;
 }
 
+/* Full search results page: the same row, in normal flow beside the
+   name instead of floated over the card. */
+.my-search-actions--inline {
+  position: static;
+  height: auto;
+  align-self: center;
+  flex: none;
+}
+
+.my-search-actions--inline .my-search-actions__buttons {
+  position: static;
+  transform: none;
+  right: auto;
+  top: auto;
+}
+
 .my-search-action {
   display: inline-flex;
   align-items: center;

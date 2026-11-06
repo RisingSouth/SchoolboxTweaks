@@ -38,7 +38,10 @@
     if (tweakToggles.markbookShading) addAssessmentTypeShading();
     if (tweakToggles.markbookQuickLinks) addMarkbookQuickLinks();
     if (tweakToggles.classesGridQuickLinks) addQuickLinksOnClassesPage();
-    if (tweakToggles.searchStudentActions) addStudentActionsToSearchResults();
+    if (tweakToggles.searchStudentActions) {
+      addStudentActionsToSearchResults();
+      addStudentActionsToSearchPage();
+    }
     if (tweakToggles.classListFlagFilter) addPastoralFlagFilter();
     if (tweakToggles.classListPmiBadge) addPmiBadges();
     if (tweakToggles.classListAttentionTags) addStudentAttentionTags();
@@ -1304,6 +1307,44 @@
       }
       card.after(newRow);
     });
+  }
+
+  // Full search results page (/search?keyword=...): same shortcut row as
+  // the header dropdown, but laid out inline inside each student's card
+  // instead of floated over it. Here the result's meta line starts with
+  // the person's type ("Student | HDC Secondary Students",
+  // "Parent | Parents"), which is a clearer signal than the dropdown's
+  // year-level text, so only "Student |" results get the row.
+  function addStudentActionsToSearchPage() {
+    const results = document.querySelector('[data-test="sp-results"]');
+    if (!results) return;
+
+    results
+      .querySelectorAll('[data-test^="sp-results-result-"]')
+      .forEach((result) => {
+        const link = result.querySelector('h3 a[href^="/search/user/"]');
+        const meta = result.querySelector(".meta");
+        const idMatch = link && link.getAttribute("href").match(/^\/search\/user\/(\d+)$/);
+        const isStudent = !!idMatch && !!meta && /^\s*student\s*\|/i.test(meta.textContent);
+
+        const existing = result.querySelector(".my-search-actions");
+        if (!isStudent) {
+          if (existing) existing.remove();
+          return;
+        }
+        if (existing && existing.dataset.studentId === idMatch[1]) return;
+        if (existing) existing.remove();
+
+        // The card's top row: portrait, name column, then Schoolbox's own
+        // "..." pop-out. The shortcuts go between the name and the pop-out.
+        const nameColumn = meta.parentElement;
+        const rowEl = nameColumn && nameColumn.parentElement;
+        if (!rowEl) return;
+        const name = link.textContent.trim() || "student";
+        const newRow = buildSearchActionRow(idMatch[1], name);
+        newRow.classList.add("my-search-actions--inline");
+        nameColumn.after(newRow);
+      });
   }
 
   function buildSearchActionRow(studentId, name) {
