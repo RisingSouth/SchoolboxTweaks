@@ -4130,12 +4130,16 @@
   // or shown, never rebuilt, so links and status markup stay intact.
   // The term segment is optional: the student-search Grades button links
   // to /learning/grades/{studentId}, which shows the current term without
-  // adding it to the URL. The single-class page (.../{term}/{classId})
-  // deliberately doesn't match.
+  // adding it to the URL. The year summary
+  // (/learning/grades/grades-year/{studentId}/year/{yyyy}) uses the same
+  // markup, so it matches too. The single-class page
+  // (.../{term}/{classId}) deliberately doesn't.
   // ---------------------------------------------------------------
 
   function isGradesOverviewPage() {
-    return /^\/learning\/grades\/\d+(\/\d{4}-\d+)?\/?$/.test(window.location.pathname);
+    return /^\/learning\/grades\/(?:\d+(?:\/\d{4}-\d+)?|grades-year\/\d+\/year\/\d{4})\/?$/.test(
+      window.location.pathname
+    );
   }
 
   function addGradesOverviewPanels() {
