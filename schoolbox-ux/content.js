@@ -47,6 +47,7 @@
     if (tweakToggles.classListAttentionTags) addStudentAttentionTags();
     if (tweakToggles.classListColumnReorg) reorganiseClassListColumns();
     if (tweakToggles.classListStudentCount) updateClassListStudentCount();
+    if (tweakToggles.classListExportCsv) addClassListCsvExport();
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
     if (tweakToggles.dashboardRelief) addReliefCheckToDashboard();
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
@@ -1927,6 +1928,262 @@
     if (label.textContent !== text) {
       label.textContent = text;
     }
+  }
+
+  // ---------------------------------------------------------------
+  // Class List: "Export CSV" button.
+  //
+  // Adds a button to the Class List toolbar (next to "Compose Email")
+  // that opens a small panel of column switches and downloads a CSV of
+  // the students currently on screen: only the ticked ones if any
+  // checkbox is ticked, otherwise everyone who isn't hidden by the
+  // pastoral flag filter. Everything is read from the live DOM - no
+  // fetch, no new permissions. Only name / email / student ID can ever
+  // be exported; flags, medical and pastoral data are never read.
+  // ---------------------------------------------------------------
+  const csvExportColumns = [
+    { key: "name", label: "Name", on: true },
+    { key: "email", label: "Email", on: true },
+    { key: "id", label: "Student ID", on: false },
+  ];
+  let csvPanel = null;
+  let csvPanelSummary = null;
+  let csvPanelDownload = null;
+  let csvGlobalListenersAdded = false;
+
+  function getCsvStudentRows() {
+    const table = document.querySelector("#contact-table");
+    if (!table) return [];
+    const rows = Array.from(table.querySelectorAll("tbody tr")).filter(
+      (row) =>
+        !row.classList.contains("sub-row") &&
+        window.getComputedStyle(row).display !== "none"
+    );
+    const ticked = rows.filter((row) => {
+      const box = row.querySelector('input[name="students[]"]');
+      return box && box.checked;
+    });
+    return { rows: ticked.length ? ticked : rows, usingTicked: ticked.length > 0 };
+  }
+
+  function extractCsvStudent(row) {
+    const nameLink = row.querySelector('a[data-test$="-username"]');
+    const name = nameLink
+      ? nameLink.textContent.replace(/\s+/g, " ").trim()
+      : "";
+
+    let id = "";
+    const idSpan = nameLink && nameLink.parentElement
+      ? nameLink.parentElement.querySelector("span.meta")
+      : null;
+    if (idSpan) id = idSpan.textContent.replace(/[()]/g, "").trim();
+
+    let email = "";
+    const mailLink = row.querySelector('a[href^="/mail/create?replyto="]');
+    if (mailLink) {
+      try {
+        email =
+          new URL(mailLink.getAttribute("href"), window.location.origin)
+            .searchParams.get("replyto") || "";
+      } catch (e) {
+        email = "";
+      }
+    }
+    if (!email) {
+      const printSpan = row.querySelector("span.show-for-print");
+      if (printSpan) email = printSpan.textContent.trim();
+    }
+
+    return { name, id, email };
+  }
+
+  function csvQuote(value) {
+    return '"' + String(value).replace(/"/g, '""') + '"';
+  }
+
+  function updateCsvPanelState() {
+    if (!csvPanel) return;
+    const info = getCsvStudentRows();
+    const count = info.rows ? info.rows.length : 0;
+    const noun = count === 1 ? "student" : "students";
+    csvPanelSummary.textContent = info.usingTicked
+      ? `Exporting ${count} ticked ${noun}`
+      : `Exporting ${count} ${noun}`;
+    const anyColumn = csvExportColumns.some((col) => col.on);
+    csvPanelDownload.disabled = !anyColumn || count === 0;
+  }
+
+  function downloadClassListCsv() {
+    const info = getCsvStudentRows();
+    if (!info.rows || !info.rows.length) return;
+    const columns = csvExportColumns.filter((col) => col.on);
+    if (!columns.length) return;
+
+    const lines = [columns.map((col) => csvQuote(col.label)).join(",")];
+    info.rows.forEach((row) => {
+      const student = extractCsvStudent(row);
+      lines.push(columns.map((col) => csvQuote(student[col.key])).join(","));
+    });
+
+    const csv = "﻿" + lines.join("\r\n") + "\r\n";
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const heading = document.querySelector("#email-class-lists h1");
+    const className = (heading ? heading.textContent : "")
+      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${className || "Class list"} - students.csv`;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function buildCsvPanel() {
+    const panel = document.createElement("div");
+    panel.className = "my-csv-panel";
+    panel.hidden = true;
+
+    const title = document.createElement("div");
+    title.className = "my-csv-panel-title";
+    title.textContent = "Export CSV";
+    panel.appendChild(title);
+
+    csvExportColumns.forEach((col) => {
+      const row = document.createElement("div");
+      row.className = "my-csv-panel-row";
+
+      const text = document.createElement("span");
+      text.textContent = col.label;
+      row.appendChild(text);
+
+      // Custom switch rather than a native checkbox - Schoolbox's own
+      // CSS leaves plain checkboxes invisible (see the flag filter's
+      // "Remember my choices" switch).
+      const switchLabel = document.createElement("label");
+      switchLabel.className = "my-nav-switch";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = col.on;
+      input.addEventListener("change", () => {
+        col.on = input.checked;
+        updateCsvPanelState();
+      });
+      const slider = document.createElement("span");
+      slider.className = "my-nav-slider";
+      switchLabel.appendChild(input);
+      switchLabel.appendChild(slider);
+      row.appendChild(switchLabel);
+
+      panel.appendChild(row);
+    });
+
+    csvPanelSummary = document.createElement("div");
+    csvPanelSummary.className = "my-csv-panel-summary";
+    panel.appendChild(csvPanelSummary);
+
+    csvPanelDownload = document.createElement("button");
+    csvPanelDownload.type = "button";
+    csvPanelDownload.className = "my-csv-panel-download";
+    csvPanelDownload.textContent = "Download";
+    csvPanelDownload.addEventListener("click", () => {
+      downloadClassListCsv();
+      panel.hidden = true;
+    });
+    panel.appendChild(csvPanelDownload);
+
+    // Appended to <body>, not next to the button: the toolbar sits
+    // inside the class-list Vue app, which can wipe anything inserted
+    // there on a re-render.
+    document.body.appendChild(panel);
+    return panel;
+  }
+
+  function toggleCsvPanel(button) {
+    if (!csvPanel || !csvPanel.isConnected) csvPanel = buildCsvPanel();
+
+    if (!csvPanel.hidden) {
+      csvPanel.hidden = true;
+      return;
+    }
+
+    updateCsvPanelState();
+    const rect = button.getBoundingClientRect();
+    csvPanel.style.top = `${rect.bottom + window.scrollY + 6}px`;
+    csvPanel.style.left = `${Math.max(
+      8,
+      Math.min(rect.left + window.scrollX, window.scrollX + window.innerWidth - 248)
+    )}px`;
+    csvPanel.hidden = false;
+  }
+
+  function addClassListCsvExport() {
+    if (!isClassListPage()) return;
+
+    if (!csvGlobalListenersAdded) {
+      csvGlobalListenersAdded = true;
+      // Keeps the "Exporting N students" line in step with the row
+      // checkboxes, which live inside Vue and are re-rendered freely.
+      document.addEventListener("change", (event) => {
+        const target = event.target;
+        if (
+          csvPanel &&
+          !csvPanel.hidden &&
+          target.matches &&
+          target.matches('input[name="students[]"], #select-all')
+        ) {
+          updateCsvPanelState();
+        }
+      });
+      document.addEventListener("click", (event) => {
+        if (!csvPanel || csvPanel.hidden) return;
+        if (
+          csvPanel.contains(event.target) ||
+          (event.target.closest && event.target.closest(".my-csv-export-item"))
+        ) {
+          return;
+        }
+        csvPanel.hidden = true;
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && csvPanel) csvPanel.hidden = true;
+      });
+    }
+
+    const toolbar = document.querySelector(
+      "#email-class-lists ul.flex-list.buttons"
+    );
+    if (!toolbar) return;
+    if (toolbar.querySelector(".my-csv-export-item")) return;
+
+    const item = document.createElement("li");
+    item.className = "my-csv-export-item";
+
+    const button = document.createElement("a");
+    button.href = "#";
+    button.className = "sbx-button--has-icon";
+    button.title = "Download names and emails as a CSV file";
+
+    const icon = document.createElement("sbx-icon");
+    icon.setAttribute("name", "download");
+    icon.setAttribute("size", "m");
+    icon.setAttribute("color", "currentColor");
+    button.appendChild(icon);
+    button.appendChild(document.createTextNode("Export CSV"));
+
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      toggleCsvPanel(button);
+    });
+
+    item.appendChild(button);
+    toolbar.appendChild(item);
   }
 
   // YM/HOY issues are logged as two separate flags - "Given" and

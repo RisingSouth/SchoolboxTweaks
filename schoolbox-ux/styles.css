@@ -507,6 +507,61 @@ td[data-pop-out-menu="true"]:hover .my-mb-quicklink--cell,
 }
 
 /*
+  Class List "Export CSV" panel. Appended to <body> (outside the
+  class-list Vue app) and only ever built when the tweak is on, so
+  these classes don't exist at all when it's switched off.
+*/
+.my-csv-panel {
+  position: absolute;
+  z-index: 10000;
+  width: 240px;
+  padding: 12px 14px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  font-size: 13px;
+  color: #333;
+}
+
+.my-csv-panel[hidden] {
+  display: none;
+}
+
+.my-csv-panel-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.my-csv-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+.my-csv-panel-summary {
+  margin: 8px 0 10px;
+  color: #666;
+  font-size: 12px;
+}
+
+.my-csv-panel-download {
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 4px;
+  background: rgb(30, 105, 128);
+  color: white;
+  cursor: pointer;
+}
+
+.my-csv-panel-download:disabled {
+  background: #bbb;
+  cursor: not-allowed;
+}
+
+/*
   Same red Schoolbox itself uses for alert-type flags/icons
   (--sbx-color-alert, #fa4a47 fallback), so this reads as consistent
   with the site's own colour language rather than something bolted

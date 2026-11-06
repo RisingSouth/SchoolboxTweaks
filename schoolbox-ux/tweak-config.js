@@ -129,6 +129,11 @@ const TWEAK_GROUPS = [
         label: "Student count",
         description: "Shows how many students are visible in the pastoral flag filter bar",
       },
+      {
+        id: "classListExportCsv",
+        label: "Export student list (CSV)",
+        description: "Adds an Export CSV button to the class list for downloading names and emails.",
+      },
     ],
   },
   {
