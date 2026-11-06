@@ -67,35 +67,76 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
         tabId = tab.id;
 
-        const deadline = Date.now() + 25000;
+        const startedAt = Date.now();
+        const deadline = startedAt + 25000;
+        // A signed-in session can briefly pass through another Edval URL
+        // (token refresh, redirect hop) on its way to /timetable, so a
+        // single off-/timetable snapshot isn't proof of being signed out.
+        // Only decide "login" after a grace period, once the tab has
+        // finished loading, and only if the same off-timetable state is
+        // seen on several consecutive polls.
+        const LOGIN_GRACE_MS = 4000;
+        const LOGIN_CONSECUTIVE_POLLS = 3;
+        let offTimetablePolls = 0;
+        let lastOffTimetableUrl = null;
         let result = null;
         while (Date.now() < deadline) {
           await new Promise((r) => setTimeout(r, 800));
 
-          // Signed-out visitors get redirected away from /timetable
-          // (to Edval's sign-in page), where the scraper script never
-          // loads. Catch that straight away instead of waiting out the
-          // timeout. (Reading tab.url needs the Edval host permission,
-          // which the extension has.)
+          let current = null;
+          let offTimetable = false;
           try {
-            const current = await chrome.tabs.get(tabId);
+            current = await chrome.tabs.get(tabId);
             if (current.url) {
               const u = new URL(current.url);
-              if (
+              offTimetable =
                 u.hostname === "my.edval.education" &&
-                !u.pathname.startsWith("/timetable")
-              ) {
-                result = { status: "login" };
-                break;
-              }
+                !u.pathname.startsWith("/timetable");
             }
           } catch (e) {}
+          console.log(
+            "[my-relief] poll:",
+            current && current.url,
+            current && current.status
+          );
+
+          if (offTimetable) {
+            if (current.url === lastOffTimetableUrl) {
+              offTimetablePolls++;
+            } else {
+              lastOffTimetableUrl = current.url;
+              offTimetablePolls = 1;
+            }
+            if (
+              Date.now() - startedAt >= LOGIN_GRACE_MS &&
+              current.status === "complete" &&
+              offTimetablePolls >= LOGIN_CONSECUTIVE_POLLS
+            ) {
+              console.log("[my-relief] login: off-/timetable path", current.url);
+              result = { status: "login" };
+              break;
+            }
+            // Not settled yet - the scraper isn't loaded on this page
+            // anyway, so keep polling.
+            continue;
+          }
+          offTimetablePolls = 0;
+          lastOffTimetableUrl = null;
 
           try {
             const reply = await chrome.tabs.sendMessage(tabId, {
               type: "SCRAPE_RELIEF",
             });
-            if (reply && reply.status !== "loading") {
+            if (reply && reply.status === "login") {
+              // Reported by edval-scrape.js (form on the page, or path
+              // check). Apply the same grace period so a page that is
+              // still settling isn't misread.
+              if (Date.now() - startedAt >= LOGIN_GRACE_MS) {
+                console.log("[my-relief] login: reported by scraper");
+                result = reply;
+                break;
+              }
+            } else if (reply && reply.status !== "loading") {
               result = reply;
               break;
             }
