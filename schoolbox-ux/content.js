@@ -2547,18 +2547,32 @@
       if (!row.classList.contains("type1") || !row.classList.contains("source8"))
         continue;
 
+      // Schoolbox 26.1.15 no longer renders data-calendar-event-relation
+      // on these rows; the class id now only appears as a "group{id}"
+      // CSS class (e.g. "group5878"). Try the attribute first in case
+      // it comes back, then fall back to the class.
       const relation = row.dataset.calendarEventRelation || "";
-      const match = relation.match(/^group:(\d+)$/);
-      if (!match) continue;
-
-      const id = match[1];
-      if (seen.has(id)) continue;
-      seen.add(id);
+      let id = (relation.match(/^group:(\d+)$/) || [])[1];
+      if (!id) {
+        const groupClass = Array.from(row.classList).find((c) =>
+          /^group\d+$/.test(c)
+        );
+        if (groupClass) id = groupClass.slice("group".length);
+      }
+      if (!id) continue;
 
       const titleEl = row.querySelector(".fc-event-title");
       const label = titleEl
         ? titleEl.textContent.trim().replace(/\s+/g, " ")
         : `Class ${id}`;
+
+      // Dedupe on id + label, not id alone: combined classes (e.g.
+      // AECSCH 01 and A2CSCH 01) share one group id but have different
+      // codes, and each code needs its own entry to match its box.
+      const key = `${id}|${label}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
       entries.push({ id, label });
     }
 
