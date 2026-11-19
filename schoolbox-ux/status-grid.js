@@ -17,6 +17,8 @@
   if (!/\/learning\/assessments\/\d+\/status/.test(location.pathname)) return;
 
   const ROW = "li[data-participant]";
+  // In an empty mark box: A / N / S enter Schoolbox's three non-numeric statuses.
+  const STATUS_KEYS = { a: "Absent", n: "Not Assessed", s: "Not Submitted" };
   let on = true;
   try {
     on = localStorage.getItem("sbux-grid") !== "off";
@@ -71,9 +73,9 @@
           if (focusCell(li, "feedback")) e.preventDefault();
         } else if (e.key === "Escape") {
           t.blur();
-        } else if ((e.key === "a" || e.key === "A") && !t.value && !e.ctrlKey && !e.metaKey) {
+        } else if (!t.value && !e.ctrlKey && !e.metaKey && !e.altKey && STATUS_KEYS[e.key.toLowerCase()]) {
           e.preventDefault();
-          setValue(t, "Absent");
+          setValue(t, STATUS_KEYS[e.key.toLowerCase()]);
           move(li, "mark", 1);
         }
       } else if (t.closest(".ck-editor__editable")) {
@@ -314,6 +316,14 @@
       const lab = markCol.querySelector("label");
       S(lab, { display: "block", margin: "0", "font-size": "0", "line-height": "0", "grid-column": "3", "grid-row": "1", width: "100%" });
       S(lab && lab.querySelector(".combobox"), { display: "block", width: "100%" });
+      const markInput = markCol.querySelector('input[name="mark"]');
+      if (markInput) {
+        // stop Chrome's autofill history ("30 / 40" ...) popping up over the grid
+        markInput.setAttribute("autocomplete", "off");
+        form.setAttribute("autocomplete", "off");
+        const lim = markInput.getAttribute("data-validation-limit");
+        if (lim) markInput.setAttribute("placeholder", "/" + lim);
+      }
       S(markCol.querySelector('input[name="mark"]'), { "font-size": "13px", height: "30px", width: "100%", margin: "0", padding: "0 8px", "text-align": "right" });
       Array.from(commentCol.children).forEach((c) => {
         if (!c.classList.contains("ck-editor") && c.tagName !== "TEXTAREA") S(c, { display: "none" });
@@ -379,7 +389,7 @@
     });
     const hint = el("p", "my-grid-hint");
     hint.innerHTML =
-      "<kbd>Enter</kbd> next student (same column) · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line in feedback · <kbd>Tab</kbd> mark to feedback · <kbd>Esc</kbd> stop editing · <kbd>A</kbd> in a mark = Absent · paste a column to fill down";
+      "<kbd>Enter</kbd> next student (same column) · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line in feedback · <kbd>Tab</kbd> mark to feedback · <kbd>Esc</kbd> stop editing · in an empty mark: <kbd>A</kbd> Absent · <kbd>N</kbd> Not Assessed · <kbd>S</kbd> Not Submitted · paste a column to fill down";
     section.parentElement.insertBefore(bar, section);
     section.parentElement.insertBefore(head, section);
     section.appendChild(hint);
