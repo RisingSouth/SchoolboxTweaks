@@ -132,6 +132,100 @@
       event.preventDefault();
       toggleNavPanel(li);
     });
+
+    // Amber dot while there's a changelog entry the user hasn't
+    // opened yet. Lives on the button (not inside the tweaks-gated
+    // code) so it still shows with tweaks switched off.
+    chrome.storage.sync.get({ lastSeenVersion: "0" }, (result) => {
+      if (getUnseenChangelog(result.lastSeenVersion).length === 0) return;
+      if (li.querySelector(".my-nav-dot")) return;
+      const dot = document.createElement("span");
+      dot.className = "my-nav-dot";
+      dot.setAttribute("aria-label", "New updates");
+      li.appendChild(dot);
+    });
+  }
+
+  // Marks the running version as seen, so the nav dot and the
+  // settings page's "New" pills stop showing. Both are driven off
+  // chrome.storage.sync.lastSeenVersion.
+  function markChangelogSeen() {
+    chrome.storage.sync.set({ lastSeenVersion: chrome.runtime.getManifest().version });
+  }
+
+  // Clears the dot in this tab when another tab (or the settings
+  // page) marks the update as seen.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "sync" && changes.lastSeenVersion) {
+      document.querySelectorAll(".my-nav-dot").forEach((el) => el.remove());
+    }
+  });
+
+  // "What's new" row at the top of the nav dropdown. Highlighted
+  // while unseen; expanding it lists the unseen entries (or the
+  // latest one, if everything's been seen) and marks them seen.
+  function buildWhatsNewSection(panel, lastSeenVersion) {
+    if (!CHANGELOG.length) return;
+    const unseen = getUnseenChangelog(lastSeenVersion);
+    const entries = unseen.length ? unseen : [CHANGELOG[0]];
+
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "my-nav-folder-row my-nav-whatsnew-row";
+    if (unseen.length) row.classList.add("my-nav-whatsnew-row--unseen");
+
+    const label = document.createElement("span");
+    label.className = "my-nav-folder-label";
+    label.textContent = "What's new in " + entries[0].version;
+
+    const chevron = document.createElement("span");
+    chevron.className = "my-nav-chevron";
+    chevron.textContent = "\u25BE";
+
+    row.appendChild(label);
+    row.appendChild(chevron);
+    panel.appendChild(row);
+
+    const list = document.createElement("div");
+    list.className = "my-nav-whatsnew-list";
+    list.hidden = true;
+
+    entries.forEach((entry) => {
+      entry.items.forEach((item) => {
+        const el = document.createElement("div");
+        el.className = "my-nav-whatsnew-item";
+        const title = document.createElement("strong");
+        title.textContent = item.title;
+        const text = document.createElement("span");
+        text.textContent = item.text;
+        el.appendChild(title);
+        el.appendChild(text);
+        list.appendChild(el);
+      });
+    });
+
+    // chrome.runtime.openOptionsPage() isn't available to content
+    // scripts - same relay through background.js as the Settings row.
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "my-nav-whatsnew-more";
+    more.textContent = "See everything in Settings \u2192";
+    more.addEventListener("click", () => {
+      chrome.runtime.sendMessage({ type: "OPEN_OPTIONS_PAGE" });
+    });
+    list.appendChild(more);
+    panel.appendChild(list);
+
+    row.addEventListener("click", () => {
+      const opening = list.hidden;
+      list.hidden = !opening;
+      chevron.classList.toggle("my-nav-chevron--open", opening);
+      if (opening && unseen.length) {
+        row.classList.remove("my-nav-whatsnew-row--unseen");
+        document.querySelectorAll(".my-nav-dot").forEach((el) => el.remove());
+        markChangelogSeen();
+      }
+    });
   }
 
   function toggleNavPanel(li) {
@@ -141,7 +235,7 @@
       return;
     }
 
-    chrome.storage.sync.get({ tweaksEnabled: true }, (result) => {
+    chrome.storage.sync.get({ tweaksEnabled: true, lastSeenVersion: "0" }, (result) => {
       const rect = li.getBoundingClientRect();
 
       const panel = document.createElement("div");
@@ -149,6 +243,8 @@
       panel.className = "my-nav-panel";
       panel.style.top = `${rect.bottom + 4}px`;
       panel.style.right = `${window.innerWidth - rect.right}px`;
+
+      buildWhatsNewSection(panel, result.lastSeenVersion);
 
       const toggleRow = document.createElement("div");
       toggleRow.className = "my-nav-panel-row";
@@ -256,7 +352,7 @@
 
       const footer = document.createElement("div");
       footer.className = "my-nav-panel-footer";
-      footer.textContent = "v1.2.9";
+      footer.textContent = "v" + chrome.runtime.getManifest().version;
       panel.appendChild(footer);
 
       document.body.appendChild(panel);

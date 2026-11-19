@@ -23,6 +23,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const cutoffErrorsByScale = {};
   let isDirty = false;
 
+  // The version the user last acknowledged (see chrome.storage.sync
+  // lastSeenVersion). Read once at load, so "New" pills stay put for
+  // this visit even after the banner is dismissed.
+  let lastSeenVersion = "0";
+
   function hasGradeErrors() {
     return Object.keys(cutoffErrorsByScale).some((id) => cutoffErrorsByScale[id]);
   }
@@ -41,7 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function applyMasterDisabledState() {
     document
-      .querySelectorAll(".group-card")
+      .querySelectorAll(".group-card:not(.whats-new-card)")
       .forEach((card) => card.classList.toggle("is-disabled", !pendingTweaksEnabled));
     Object.values(checkboxesById).forEach((checkbox) => {
       checkbox.disabled = !pendingTweaksEnabled;
@@ -153,6 +158,59 @@ document.addEventListener("DOMContentLoaded", () => {
       : "";
   }
 
+  // Banner at the top while there's an unseen update, plus the full
+  // changelog card at the bottom. Dismissing only writes
+  // lastSeenVersion - it doesn't touch the pending settings, so it
+  // never marks the page as having unsaved changes.
+  function renderWhatsNew() {
+    const banner = document.getElementById("whats-new-banner");
+    const unseen = getUnseenChangelog(lastSeenVersion);
+    if (unseen.length) {
+      const newCount = TWEAK_GROUPS.reduce(
+        (n, g) => n + g.tweaks.filter((t) => isTweakNew(t, lastSeenVersion)).length,
+        0
+      );
+      banner.textContent = "";
+      const text = document.createElement("span");
+      text.textContent =
+        "New since you last looked: version " +
+        unseen[0].version +
+        (newCount ? " adds " + newCount + " features, marked New below." : ".");
+      const dismiss = document.createElement("button");
+      dismiss.type = "button";
+      dismiss.textContent = "Dismiss";
+      dismiss.addEventListener("click", () => {
+        chrome.storage.sync.set({ lastSeenVersion: chrome.runtime.getManifest().version });
+        banner.hidden = true;
+      });
+      banner.appendChild(text);
+      banner.appendChild(dismiss);
+      banner.hidden = false;
+    }
+
+    const card = document.getElementById("whats-new");
+    const heading = document.createElement("h2");
+    heading.textContent = "What's new";
+    card.appendChild(heading);
+    CHANGELOG.forEach((entry) => {
+      const v = document.createElement("p");
+      v.className = "tweak-name";
+      v.textContent = "Version " + entry.version;
+      card.appendChild(v);
+      const ul = document.createElement("ul");
+      ul.className = "whats-new-list";
+      entry.items.forEach((item) => {
+        const li = document.createElement("li");
+        const strong = document.createElement("strong");
+        strong.textContent = item.title + ": ";
+        li.appendChild(strong);
+        li.appendChild(document.createTextNode(item.text));
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+    });
+  }
+
   function renderGroups() {
     TWEAK_GROUPS.forEach((group) => {
       const card = document.createElement("section");
@@ -170,6 +228,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const name = document.createElement("p");
         name.className = "tweak-name";
         name.textContent = tweak.label;
+        if (isTweakNew(tweak, lastSeenVersion)) {
+          const pill = document.createElement("span");
+          pill.className = "new-pill";
+          pill.textContent = "New";
+          name.appendChild(pill);
+        }
         const desc = document.createElement("p");
         desc.className = "tweak-desc";
         desc.textContent = tweak.description;
@@ -203,13 +267,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   chrome.storage.sync.get(
-    { tweaksEnabled: true, tweakToggles: {}, gradeCutoffs: {} },
+    { tweaksEnabled: true, tweakToggles: {}, gradeCutoffs: {}, lastSeenVersion: "0" },
     (result) => {
+      lastSeenVersion = result.lastSeenVersion;
       pendingTweaksEnabled = result.tweaksEnabled;
       pendingToggles = mergeTweakTogglesWithDefaults(result.tweakToggles);
       pendingCutoffs = mergeGradeCutoffsWithDefaults(result.gradeCutoffs);
 
       masterToggle.checked = pendingTweaksEnabled;
+      renderWhatsNew();
       renderGroups();
       renderGradeScales();
       applyMasterDisabledState();

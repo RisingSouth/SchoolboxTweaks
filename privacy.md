@@ -62,7 +62,8 @@ the next time the user clicks the button and deleted automatically
 once the day has passed.
 
 The extension stores its settings and preferences (such as the
-on/off toggle for its page modifications) locally, using Chrome's
+on/off toggle for its page modifications, and the version number of
+the last "What's new" notice the user has seen) locally, using Chrome's
 `chrome.storage.sync` API — kept until the user changes them or
 uninstalls the extension.
 

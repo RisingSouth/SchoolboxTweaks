@@ -258,3 +258,53 @@ body {
 .grade-reset:hover:not(:disabled) {
   background: #f4f4f2;
 }
+
+.whats-new-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #faeeda;
+  color: #633806;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.whats-new-banner[hidden] {
+  display: none;
+}
+
+.whats-new-banner button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.new-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: #e6f1fb;
+  color: #0c447c;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
+.whats-new-card {
+  margin-top: 16px;
+}
+
+.whats-new-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: #444;
+  line-height: 1.6;
+}

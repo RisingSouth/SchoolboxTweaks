@@ -1872,3 +1872,65 @@ body.my-status-grid .my-grid-row .ck-editor:focus-within { min-height: 30px; }
 #my-grid-menu button { -webkit-appearance: none !important; appearance: none !important; box-sizing: border-box !important; display: block !important; width: 100% !important; height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 7px 10px !important; font: 13px/1.2 inherit !important; text-align: left !important; text-transform: none !important; letter-spacing: normal !important; border: 0 !important; border-radius: 6px !important; background: transparent !important; color: #222 !important; box-shadow: none !important; cursor: pointer !important; }
 #my-grid-menu button:hover { background: #eef3f5 !important; }
 #my-grid-menu button:last-child { color: #8a3a2f !important; }
+
+/* "What's new" - nav dot and dropdown section */
+.my-nav-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ef9f27;
+  border: 1.5px solid rgb(30, 105, 128);
+  pointer-events: none;
+}
+
+.my-nav-panel {
+  min-width: 260px;
+  max-width: 300px;
+}
+
+.my-nav-whatsnew-row--unseen {
+  background: #faeeda;
+  color: #633806;
+}
+
+.my-nav-whatsnew-row--unseen:hover {
+  background: #f6e3c4;
+}
+
+.my-nav-whatsnew-list[hidden] {
+  display: none;
+}
+
+.my-nav-whatsnew-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 14px;
+  border-bottom: 1px solid #e5e5e5;
+  font-size: 13px;
+  color: #222;
+}
+
+.my-nav-whatsnew-item span {
+  font-size: 12px;
+  color: #666;
+}
+
+.my-nav-whatsnew-more {
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 1px solid #e5e5e5;
+  background: transparent;
+  font-size: 12px;
+  color: rgb(30, 105, 128);
+  text-align: left;
+  cursor: pointer;
+}
+
+.my-nav-whatsnew-more:hover {
+  background: #f5f5f5;
+}

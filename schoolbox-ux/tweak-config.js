@@ -71,6 +71,7 @@ const TWEAK_GROUPS = [
       },
       {
         id: "markbookPeriodMemory",
+        since: "1.2.9",
         label: "Remember academic period filter",
         description: "Remembers the Due in Academic Period you last applied and re-applies it on each visit (this year / current / current + previous / fixed); a fixed choice drops back to the default when a newer period appears",
       },
@@ -206,17 +207,71 @@ const TWEAK_GROUPS = [
     tweaks: [
       {
         id: "assessmentStatusGrid",
+        since: "1.2.9",
         label: "Marking grid",
         description: "Spreadsheet-style marking page: one row per student, type marks and feedback with Enter/arrow keys, A/N/S or the ▾ menu for Absent/Not Assessed/Not Submitted, stats, Unmarked/Drafts filters, per-row Publish, hover portraits. Staff can switch back to Classic on the page",
       },
       {
         id: "assessmentStatusLimit",
+        since: "1.2.9",
         label: "Show up to 50 students per page",
         description: "Raises Schoolbox's 25-per-page cap on the assessment status page (takes effect on next page load)",
       },
     ],
   },
 ];
+
+// ---------------------------------------------------------------
+// What's new. One entry per released version, newest first. A tweak
+// carrying `since: "x.y.z"` in TWEAK_GROUPS gets a "New" pill on the
+// settings page until the user has seen that version (see
+// lastSeenVersion in chrome.storage.sync). Add the entry here and a
+// `since` on any new tweak when bumping the manifest version.
+// Entries are highlights grouped by feature, not one per commit.
+// ---------------------------------------------------------------
+const CHANGELOG = [
+  {
+    version: "1.2.9",
+    items: [
+      {
+        title: "Marking grid",
+        text: "New \"Assessment status page\" group in Settings. Turns the grid on or off; when off, the status page stays as Schoolbox made it.",
+      },
+      {
+        title: "Show up to 50 students per page",
+        text: "Controls the 25 to 50 limit on the assessment status page. Applies on the next page load.",
+      },
+      {
+        title: "Remember academic period filter",
+        text: "In the Markbook group. Turns the automatic period memory on or off.",
+      },
+    ],
+  },
+];
+
+// Compares dotted version strings numerically: -1, 0 or 1.
+function compareVersions(a, b) {
+  const pa = String(a || "0").split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = String(b || "0").split(".").map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const x = pa[i] || 0;
+    const y = pb[i] || 0;
+    if (x !== y) return x > y ? 1 : -1;
+  }
+  return 0;
+}
+
+// Changelog entries newer than what the user last saw. An unset
+// lastSeenVersion (first run of this feature, or a fresh install)
+// counts as "0", so everything is unseen.
+function getUnseenChangelog(lastSeenVersion) {
+  return CHANGELOG.filter((entry) => compareVersions(entry.version, lastSeenVersion) > 0);
+}
+
+function isTweakNew(tweak, lastSeenVersion) {
+  return !!tweak.since && compareVersions(tweak.since, lastSeenVersion) > 0;
+}
 
 // Flat {id: true} defaults, derived from the groups above so there's
 // only one place that needs a new line when a tweak is added.
