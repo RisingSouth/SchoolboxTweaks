@@ -327,7 +327,11 @@
       return sortMode === "high" ? d || idx(a) - idx(b) : -d || idx(a) - idx(b);
     });
     sorted.forEach((li) => list.appendChild(li));
-    document.querySelectorAll("#my-grid-bar [data-f]").forEach((c) => c.classList.toggle("on", c.getAttribute("data-f") === filter));
+    document.querySelectorAll("#my-grid-bar [data-f]").forEach((c) => {
+      const act = c.getAttribute("data-f") === filter;
+      c.classList.toggle("on", act);
+      styleChip(c, act);
+    });
     const sb = document.getElementById("my-grid-sort");
     if (sb) setText(sb, { roll: "Class order", high: "Mark: high to low", low: "Mark: low to high" }[sortMode]);
   }
@@ -337,6 +341,21 @@
     if (!el) return;
     Object.keys(css).forEach((k) => el.style.setProperty(k, css[k], "important"));
   }
+  // Inline !important styles on our own buttons: nothing in Schoolbox's
+  // stylesheets can outrank these.
+  const BTN = {
+    "-webkit-appearance": "none", appearance: "none", "box-sizing": "border-box", display: "inline-flex",
+    "align-items": "center", "justify-content": "center", height: "26px", "min-height": "0", "min-width": "0", width: "auto",
+    margin: "0", padding: "0 14px", float: "none", "font-size": "12px", "font-weight": "500", "line-height": "1",
+    "letter-spacing": "normal", "text-transform": "none", "text-shadow": "none", "box-shadow": "none", cursor: "pointer", "white-space": "nowrap",
+  };
+  function styleChip(b, active) {
+    S(b, Object.assign({}, BTN, { border: "1px solid " + (active ? "#1e6980" : "#c9d0d4"), "border-radius": "13px", background: active ? "#dcebf1" : "#fff", color: active ? "#14566b" : "#333" }));
+  }
+  function styleSeg(b, active) {
+    S(b, Object.assign({}, BTN, { height: "24px", border: "0", "border-left": b.getAttribute("data-mode") === "classic" ? "1px solid #c9d0d4" : "0", "border-radius": "0", background: active ? "#1e6980" : "transparent", color: active ? "#fff" : "#556", cursor: active ? "default" : "pointer" }));
+  }
+
   const COLS = "28px 190px 96px 48px minmax(0, 1fr) 200px";
 
   // Per-row publish state, read from Schoolbox's own action bar:
@@ -510,6 +529,7 @@
       sortMode = sortMode === "roll" ? "high" : sortMode === "high" ? "low" : "roll";
       applyView();
     });
+    styleChip(sort, false);
     chips.appendChild(sort);
     const tg = document.getElementById("my-grid-toggle");
     if (tg) chips.appendChild(tg);
@@ -585,6 +605,7 @@
     seg.id = "my-grid-toggle";
     seg.setAttribute("role", "group");
     seg.setAttribute("aria-label", "Page layout");
+    S(seg, { display: "inline-flex", "box-sizing": "border-box", height: "26px", margin: "0", padding: "0", border: "1px solid #c9d0d4", "border-radius": "13px", overflow: "hidden", background: "#fff", "vertical-align": "middle", float: "none" });
     [["grid", "Grid"], ["classic", "Classic"]].forEach(([mode, label]) => {
       const b = el("button", "my-seg-btn", label);
       b.type = "button";
@@ -617,6 +638,7 @@
       const active = (b.getAttribute("data-mode") === "grid") === on;
       b.classList.toggle("on", active);
       b.setAttribute("aria-pressed", active ? "true" : "false");
+      styleSeg(b, active);
     });
   }
 
