@@ -195,6 +195,7 @@
         if (c.classList.contains("column")) S(c, { display: "none" });
       });
 
+      S(li, { "list-style": "none", padding: "0", height: "auto" });
       const row = document.createElement("div");
       row.className = "my-grid-row";
       S(row, {
@@ -238,7 +239,7 @@
       Array.from(commentCol.children).forEach((c) => {
         if (!c.classList.contains("ck-editor") && c.tagName !== "TEXTAREA") S(c, { display: "none" });
       });
-      S(commentCol.querySelector(".ck-editor"), { width: "100%", "max-width": "none" });
+      S(commentCol.querySelector(".ck-editor"), { width: "100%", "max-width": "none", margin: "0" });
     });
   }
 
