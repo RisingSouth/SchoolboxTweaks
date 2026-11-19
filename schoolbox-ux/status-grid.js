@@ -18,6 +18,9 @@
 
   const ROW = "li[data-participant]";
   let on = true;
+  try {
+    on = localStorage.getItem("sbux-grid") !== "off";
+  } catch (e) {}
 
   function visibleRows() {
     return Array.from(document.querySelectorAll(ROW)).filter(
@@ -129,26 +132,35 @@
     true
   );
 
-  // Builds our own name cell (portrait, name, status, attachment count)
-  // from the row's data, and marks Schoolbox's original card column as
-  // hidden - the card's own layout CSS is never relied on. The form
-  // column (mark + CKEditor) stays in place, untouched.
+  // Applies inline !important styles: these beat any stylesheet rule,
+  // including Schoolbox's own, which we can't see or rely on.
+  function S(el, css) {
+    if (!el) return;
+    Object.keys(css).forEach((k) => el.style.setProperty(k, css[k], "important"));
+  }
+
+  // Builds our own row inside the <li>: [name cell | the real <form>].
+  // The form is MOVED (not cloned), so Schoolbox's validation, draft save
+  // and publish keep working. Everything else in the form (hints,
+  // resubmission checkbox, action bar, combobox arrow) is hidden.
   function decorate() {
     document.querySelectorAll(ROW).forEach((li) => {
-      if (li.querySelector(":scope > .my-grid-name")) return;
+      if (li.querySelector(":scope > .my-grid-row")) return;
       const form = li.querySelector("form[data-feedback-form]");
-      const cols = Array.from(li.children).filter((c) => c.classList.contains("column"));
-      if (!form || !cols.length) return;
-      cols.forEach((c) => c.classList.add(c.contains(form) ? "my-grid-form-col" : "my-grid-orig"));
+      const frow = form && form.querySelector(":scope > .row");
+      if (!frow || frow.children.length < 2) return;
 
       const id = li.getAttribute("data-participant");
       const name = li.getAttribute("data-participant-name") || "";
       const submission = li.querySelector("a[data-inline-grader]");
       const href = (submission && submission.getAttribute("href")) || "/search/user/" + id;
+      const tick = li.querySelector(".progress-tick");
+      const lbl = li.querySelector("[data-assessment-status-text]");
+      const ta = form.querySelector("textarea[data-feedback-comment]");
+      const n = ta ? (ta.value.match(/fetch\.php\?hash=/g) || []).length : 0;
 
       const cell = document.createElement("div");
       cell.className = "my-grid-name";
-
       const pa = document.createElement("a");
       pa.className = "my-grid-portrait";
       pa.href = "/search/user/" + id;
@@ -157,7 +169,6 @@
       img.src = "/portrait.php?id=" + id + "&size=square64";
       img.alt = "";
       pa.appendChild(img);
-
       const text = document.createElement("div");
       text.className = "my-grid-text";
       const nm = document.createElement("a");
@@ -167,22 +178,67 @@
       nm.textContent = name;
       const sub = document.createElement("div");
       sub.className = "my-grid-sub";
-      const tick = li.querySelector(".progress-tick");
       if (tick) sub.appendChild(tick.cloneNode(true));
-      const lbl = li.querySelector("[data-assessment-status-text]");
       sub.appendChild(document.createTextNode(lbl ? lbl.textContent.trim() : ""));
-      const ta = li.querySelector("textarea[data-feedback-comment]");
-      const n = ta ? (ta.value.match(/fetch\.php\?hash=/g) || []).length : 0;
       if (n) {
-        const s = document.createElement("span");
-        s.className = "my-grid-clip";
-        s.title = n + " attachment" + (n === 1 ? "" : "s");
-        s.textContent = "\u{1F4CE}" + n;
-        sub.appendChild(s);
+        const c = document.createElement("span");
+        c.className = "my-grid-clip";
+        c.title = n + " attachment" + (n === 1 ? "" : "s");
+        c.textContent = "\u{1F4CE}" + n;
+        sub.appendChild(c);
       }
       text.append(nm, sub);
       cell.append(pa, text);
-      li.insertBefore(cell, li.firstChild);
+
+      // hide Schoolbox's own card/name column(s)
+      Array.from(li.children).forEach((c) => {
+        if (c.classList.contains("column")) S(c, { display: "none" });
+      });
+
+      const row = document.createElement("div");
+      row.className = "my-grid-row";
+      S(row, {
+        display: "grid",
+        "grid-template-columns": "240px minmax(0, 1fr)",
+        gap: "10px",
+        "align-items": "center",
+        width: "100%",
+        "box-sizing": "border-box",
+      });
+      row.append(cell, form);
+      li.appendChild(row);
+
+      // the form: block, only its .row visible
+      S(form, { display: "block", margin: "0", padding: "0", width: "auto", float: "none", "min-width": "0" });
+      Array.from(form.children).forEach((c) => {
+        if (c !== frow) S(c, { display: "none" });
+      });
+      S(frow, {
+        display: "grid",
+        "grid-template-columns": "120px minmax(0, 1fr)",
+        gap: "10px",
+        "align-items": "center",
+        margin: "0",
+        padding: "0",
+        width: "auto",
+        "max-width": "none",
+      });
+      const reset = { float: "none", width: "auto", "max-width": "none", margin: "0", padding: "0", "min-width": "0" };
+      const markCol = frow.children[0];
+      const commentCol = frow.children[1];
+      S(markCol, reset);
+      S(commentCol, reset);
+      Array.from(markCol.children).forEach((c) => {
+        if (c.tagName !== "LABEL") S(c, { display: "none" });
+      });
+      const lab = markCol.querySelector("label");
+      S(lab, { margin: "0", "font-size": "0", "line-height": "0" });
+      const mark = markCol.querySelector('input[name="mark"]');
+      S(mark, { "font-size": "14px", height: "32px", width: "110px", margin: "0", padding: "2px 8px" });
+      Array.from(commentCol.children).forEach((c) => {
+        if (!c.classList.contains("ck-editor") && c.tagName !== "TEXTAREA") S(c, { display: "none" });
+      });
+      S(commentCol.querySelector(".ck-editor"), { width: "100%", "max-width": "none" });
     });
   }
 
@@ -211,8 +267,10 @@
     b.type = "button";
     b.className = "button tiny";
     b.addEventListener("click", () => {
-      on = !on;
-      apply();
+      try {
+        localStorage.setItem("sbux-grid", on ? "off" : "on");
+      } catch (e) {}
+      location.reload();
     });
     anchor.parentElement.insertBefore(b, anchor);
     apply();
@@ -221,7 +279,7 @@
   function apply() {
     document.body.classList.toggle("my-status-grid", on);
     const b = document.getElementById("my-grid-toggle");
-    if (b) b.textContent = on ? "Grid view: on (click for classic)" : "Grid view: off";
+    if (b) b.textContent = on ? "Grid view: on (click for classic)" : "Classic view (click for grid)";
   }
 
   function init() {
@@ -230,11 +288,11 @@
       if (!r.tweaksEnabled || t.assessmentStatusGrid === false) return;
       apply();
       addToggle();
-      decorate();
+      if (on) decorate();
       ensureAllRows();
       new MutationObserver(() => {
         addToggle();
-        decorate();
+        if (on) decorate();
       }).observe(document.body, { childList: true, subtree: true });
       setTimeout(ensureAllRows, 1500);
     });
