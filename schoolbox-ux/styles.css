@@ -15,8 +15,20 @@
 */
 
 .my-added-links {
-  margin-top: 4px;
+  margin-top: 8px;
   font-size: 0.85em;
+}
+
+/*
+  Schoolbox fixes each timetable box's height inline (166px), which
+  leaves our Class List | Markbook row only ~18px of slack above the
+  bottom padding. A stylesheet !important beats the inline height;
+  12px more keeps the row from crowding the bottom edge. min-height
+  (not a fixed height) so every box in the row stays the same size.
+*/
+.timetable-subject:has(> .my-added-links) {
+  height: auto !important;
+  min-height: 178px;
 }
 
 .my-quick-actions {
