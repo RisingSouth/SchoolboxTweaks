@@ -256,7 +256,7 @@
 
       const footer = document.createElement("div");
       footer.className = "my-nav-panel-footer";
-      footer.textContent = "v1.2.9";
+      footer.textContent = "v1.2.10";
       panel.appendChild(footer);
 
       document.body.appendChild(panel);

@@ -121,7 +121,7 @@
   document.addEventListener(
     "mouseover",
     (e) => {
-      const img = e.target.closest && e.target.closest(ROW + " .card img");
+      const img = e.target.closest && e.target.closest(".my-grid-portrait img");
       if (img && img.src.includes("size=square64")) {
         img.src = img.src.replace("size=square64", "size=square192");
       }
@@ -129,18 +129,60 @@
     true
   );
 
-  // Attachment count (paperclip) per row, from marked-PDF links.
+  // Builds our own name cell (portrait, name, status, attachment count)
+  // from the row's data, and marks Schoolbox's original card column as
+  // hidden - the card's own layout CSS is never relied on. The form
+  // column (mark + CKEditor) stays in place, untouched.
   function decorate() {
     document.querySelectorAll(ROW).forEach((li) => {
-      if (li.querySelector(".my-grid-clip")) return;
-      const n = li.querySelectorAll('a[href*="/attachment"], a[href$=".pdf"], a[href*=".pdf?"]').length;
-      if (!n) return;
-      const s = document.createElement("span");
-      s.className = "my-grid-clip";
-      s.title = n + " attachment" + (n === 1 ? "" : "s");
-      s.textContent = "📎" + n;
-      const meta = li.querySelector(".card .meta");
-      if (meta) meta.appendChild(s);
+      if (li.querySelector(":scope > .my-grid-name")) return;
+      const form = li.querySelector("form[data-feedback-form]");
+      const cols = Array.from(li.children).filter((c) => c.classList.contains("column"));
+      if (!form || !cols.length) return;
+      cols.forEach((c) => c.classList.add(c.contains(form) ? "my-grid-form-col" : "my-grid-orig"));
+
+      const id = li.getAttribute("data-participant");
+      const name = li.getAttribute("data-participant-name") || "";
+      const submission = li.querySelector("a[data-inline-grader]");
+      const href = (submission && submission.getAttribute("href")) || "/search/user/" + id;
+
+      const cell = document.createElement("div");
+      cell.className = "my-grid-name";
+
+      const pa = document.createElement("a");
+      pa.className = "my-grid-portrait";
+      pa.href = "/search/user/" + id;
+      pa.title = "View profile";
+      const img = document.createElement("img");
+      img.src = "/portrait.php?id=" + id + "&size=square64";
+      img.alt = "";
+      pa.appendChild(img);
+
+      const text = document.createElement("div");
+      text.className = "my-grid-text";
+      const nm = document.createElement("a");
+      nm.className = "my-grid-student";
+      nm.href = href;
+      nm.title = "View and mark submission";
+      nm.textContent = name;
+      const sub = document.createElement("div");
+      sub.className = "my-grid-sub";
+      const tick = li.querySelector(".progress-tick");
+      if (tick) sub.appendChild(tick.cloneNode(true));
+      const lbl = li.querySelector("[data-assessment-status-text]");
+      sub.appendChild(document.createTextNode(lbl ? lbl.textContent.trim() : ""));
+      const ta = li.querySelector("textarea[data-feedback-comment]");
+      const n = ta ? (ta.value.match(/fetch\.php\?hash=/g) || []).length : 0;
+      if (n) {
+        const s = document.createElement("span");
+        s.className = "my-grid-clip";
+        s.title = n + " attachment" + (n === 1 ? "" : "s");
+        s.textContent = "\u{1F4CE}" + n;
+        sub.appendChild(s);
+      }
+      text.append(nm, sub);
+      cell.append(pa, text);
+      li.insertBefore(cell, li.firstChild);
     });
   }
 
