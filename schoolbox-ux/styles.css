@@ -1773,10 +1773,9 @@ body.my-tweak-course-list .my-cl-reset {
 .my-grid-stat strong { font-size: 17px; font-weight: 500; color: #222; }
 .my-grid-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .my-grid-spacer { flex: 1; }
-.my-grid-chip, #my-grid-toggle { height: 26px; line-height: 24px; padding: 0 12px; margin: 0; font-size: 12px; border: 1px solid #c9d0d4; border-radius: 13px; background: #fff; color: #333; cursor: pointer; }
+.my-grid-chip { height: 26px; line-height: 24px; padding: 0 12px; margin: 0; font-size: 12px; border: 1px solid #c9d0d4; border-radius: 13px; background: #fff; color: #333; cursor: pointer; }
 .my-grid-chip.on { background: #dcebf1; border-color: #1e6980; color: #14566b; }
-.my-grid-chip:hover, #my-grid-toggle:hover { border-color: #1e6980; }
-#my-grid-toggle { color: #667; }
+.my-grid-chip:hover { border-color: #1e6980; }
 
 .my-grid-head { padding: 0 10px; min-height: 30px; font-size: 11px; color: #667; background: #f3f5f6; border: 1px solid #dde2e5; border-bottom: none; border-radius: 8px 8px 0 0; box-sizing: border-box; }
 .my-grid-right { text-align: right; }
@@ -1834,3 +1833,12 @@ body.my-status-grid .my-grid-row .ck-editor:focus-within { min-height: 30px; }
 .my-grid-status .component-action-info, .my-grid-status [data-draft="drafted"] { display: none !important; }
 .my-grid-status a.button[data-draft="publish"] { display: inline-block !important; margin: 0 !important; padding: 3px 12px !important; height: auto !important; min-height: 0 !important; line-height: 1.3 !important; font-size: 11px !important; border-radius: 10px !important; cursor: pointer; }
 .my-grid-pill--draft { background: #fdecd5; color: #8a4b00; }
+
+/* Grid | Classic switch */
+.my-seg { display: inline-flex; border: 1px solid #c9d0d4; border-radius: 13px; overflow: hidden; background: #fff; vertical-align: middle; }
+.my-seg-btn { height: 24px; line-height: 22px; padding: 0 14px; margin: 0; font-size: 12px; border: none; border-radius: 0; background: transparent; color: #556; cursor: pointer; }
+.my-seg-btn + .my-seg-btn { border-left: 1px solid #c9d0d4; }
+.my-seg-btn:hover { background: #f1f5f7; }
+.my-seg-btn.on { background: #1e6980; color: #fff; cursor: default; }
+.my-grid-classic-bar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 0 8px; }
+.my-grid-classic-hint { font-size: 12px; color: #889; }

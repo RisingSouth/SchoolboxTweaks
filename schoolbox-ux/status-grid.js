@@ -559,29 +559,52 @@
     }
   }
 
+  // Segmented "Grid | Classic" switch, shown in both views. In grid view
+  // addChrome() moves it into the chip bar; in classic view it sits in a
+  // slim bar above the search box.
   function addToggle() {
     if (document.getElementById("my-grid-toggle")) return;
-    const b = el("button", "my-grid-chip");
-    b.id = "my-grid-toggle";
-    b.type = "button";
-    b.addEventListener("click", () => {
-      try {
-        localStorage.setItem("sbux-grid", on ? "off" : "on");
-      } catch (e) {}
-      location.reload();
-    });
-    // parked in the chip bar once it exists (addChrome moves it); until
-    // then, above the search box
     const host = document.querySelector("[data-participant-search]");
     const anchor = host && (host.closest(".row, div") || host.parentElement);
-    if (anchor) anchor.parentElement.insertBefore(b, anchor);
+    if (!anchor) return;
+
+    const seg = el("span", "my-seg");
+    seg.id = "my-grid-toggle";
+    seg.setAttribute("role", "group");
+    seg.setAttribute("aria-label", "Page layout");
+    [["grid", "Grid"], ["classic", "Classic"]].forEach(([mode, label]) => {
+      const b = el("button", "my-seg-btn", label);
+      b.type = "button";
+      b.setAttribute("data-mode", mode);
+      b.addEventListener("click", () => {
+        if ((mode === "grid") === on) return;
+        try {
+          localStorage.setItem("sbux-grid", mode === "grid" ? "on" : "off");
+        } catch (e) {}
+        location.reload();
+      });
+      seg.appendChild(b);
+    });
+
+    if (on) {
+      // addChrome() will place it in the chip bar; park it for now
+      anchor.parentElement.insertBefore(seg, anchor);
+    } else {
+      const bar = el("div", "my-grid-classic-bar");
+      bar.appendChild(el("span", "my-grid-classic-hint", "Marking page layout"));
+      bar.appendChild(seg);
+      anchor.parentElement.insertBefore(bar, anchor);
+    }
     apply();
   }
 
   function apply() {
     document.body.classList.toggle("my-status-grid", on);
-    const b = document.getElementById("my-grid-toggle");
-    setText(b, on ? "Classic view" : "Grid view");
+    document.querySelectorAll("#my-grid-toggle .my-seg-btn").forEach((b) => {
+      const active = (b.getAttribute("data-mode") === "grid") === on;
+      b.classList.toggle("on", active);
+      b.setAttribute("aria-pressed", active ? "true" : "false");
+    });
   }
 
   function init() {
