@@ -1773,9 +1773,6 @@ body.my-tweak-course-list .my-cl-reset {
 .my-grid-stat strong { font-size: 17px; font-weight: 500; color: #222; }
 .my-grid-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .my-grid-spacer { flex: 1; }
-.my-grid-chip { height: 26px; line-height: 24px; padding: 0 12px; margin: 0; font-size: 12px; border: 1px solid #c9d0d4; border-radius: 13px; background: #fff; color: #333; cursor: pointer; }
-.my-grid-chip.on { background: #dcebf1; border-color: #1e6980; color: #14566b; }
-.my-grid-chip:hover { border-color: #1e6980; }
 
 .my-grid-head { padding: 0 10px; min-height: 30px; font-size: 11px; color: #667; background: #f3f5f6; border: 1px solid #dde2e5; border-bottom: none; border-radius: 8px 8px 0 0; box-sizing: border-box; }
 .my-grid-right { text-align: right; }
@@ -1834,6 +1831,44 @@ body.my-status-grid .my-grid-row .ck-editor:focus-within { min-height: 30px; }
 .my-grid-status .component-action:not([data-published]) { margin: 0 !important; padding: 0 !important; height: auto !important; }
 .my-grid-status .component-action:not([data-published]) section { display: flex !important; margin: 0 !important; padding: 0 !important; height: auto !important; }
 .my-grid-status .component-action-info, .my-grid-status [data-draft="drafted"] { display: none !important; }
-.my-grid-status a.button[data-draft="publish"]:not([style*="none"]) { display: inline-block !important; margin: 0 !important; padding: 3px 12px !important; height: auto !important; min-height: 0 !important; line-height: 1.3 !important; font-size: 11px !important; border-radius: 10px !important; cursor: pointer; }
 .my-grid-pill--draft { background: #fdecd5; color: #8a4b00; }
 .my-grid-pill--published { background: #e0f2e4; color: #1f6b34; }
+
+/* ---- Buttons: hardened against Schoolbox's global button/.button styles ---- */
+#my-grid-bar button.my-grid-chip, #my-grid-toggle .my-seg-btn {
+  -webkit-appearance: none !important; appearance: none !important;
+  box-sizing: border-box !important; display: inline-flex !important; align-items: center !important; justify-content: center !important;
+  height: 26px !important; min-height: 0 !important; min-width: 0 !important; width: auto !important;
+  margin: 0 !important; padding: 0 14px !important; float: none !important;
+  font: 500 12px/1 inherit !important; font-family: inherit !important; letter-spacing: normal !important; text-transform: none !important; text-shadow: none !important; box-shadow: none !important;
+  cursor: pointer !important; white-space: nowrap !important;
+}
+#my-grid-bar button.my-grid-chip { border: 1px solid #c9d0d4 !important; border-radius: 13px !important; background: #fff !important; color: #333 !important; }
+#my-grid-bar button.my-grid-chip:hover { border-color: #1e6980 !important; background: #f4f8fa !important; }
+#my-grid-bar button.my-grid-chip.on { background: #dcebf1 !important; border-color: #1e6980 !important; color: #14566b !important; }
+#my-grid-toggle.my-seg { display: inline-flex !important; box-sizing: border-box !important; height: 26px !important; margin: 0 !important; padding: 0 !important; border: 1px solid #c9d0d4 !important; border-radius: 13px !important; overflow: hidden !important; background: #fff !important; vertical-align: middle !important; float: none !important; }
+#my-grid-toggle .my-seg-btn { border: 0 !important; border-radius: 0 !important; background: transparent !important; color: #556 !important; height: 24px !important; }
+#my-grid-toggle .my-seg-btn + .my-seg-btn { border-left: 1px solid #c9d0d4 !important; }
+#my-grid-toggle .my-seg-btn:hover { background: #f1f5f7 !important; }
+#my-grid-toggle .my-seg-btn.on { background: #1e6980 !important; color: #fff !important; cursor: default !important; }
+.my-grid-classic-bar { display: flex !important; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 0 8px !important; }
+
+/* Per-row Publish: a compact solid button after the Draft pill */
+.my-grid-status a.button[data-draft="publish"]:not([style*="none"]) {
+  -webkit-appearance: none !important; appearance: none !important;
+  display: inline-flex !important; align-items: center !important; gap: 4px !important; box-sizing: border-box !important;
+  height: 26px !important; min-height: 0 !important; min-width: 0 !important; width: auto !important; margin: 0 !important; padding: 0 12px !important; float: none !important;
+  font: 600 12px/1 inherit !important; font-family: inherit !important; letter-spacing: normal !important; text-transform: none !important; text-decoration: none !important; text-shadow: none !important;
+  border: 1px solid #1e6980 !important; border-radius: 6px !important; background: #1e6980 !important; color: #fff !important; box-shadow: none !important; cursor: pointer !important; white-space: nowrap !important;
+}
+.my-grid-status a.button[data-draft="publish"]:not([style*="none"])::before { content: "\2191"; font-weight: 700; }
+.my-grid-status a.button[data-draft="publish"]:not([style*="none"]):hover { background: #14566b !important; border-color: #14566b !important; }
+.my-grid-status a.button[data-draft="publish"]:not([style*="none"]):active { transform: translateY(1px); }
+.my-grid-status a.button[data-draft="publish"]:not([style*="none"]):focus-visible { outline: 2px solid #8fc1d4 !important; outline-offset: 2px !important; }
+
+/* ▾ status button in each mark box and its menu: same hardening */
+.my-grid-row button.my-grid-dd { -webkit-appearance: none !important; appearance: none !important; box-sizing: border-box !important; position: absolute !important; right: 2px !important; top: 3px !important; display: block !important; width: 22px !important; height: 24px !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; font: 12px/24px inherit !important; text-align: center !important; text-transform: none !important; letter-spacing: normal !important; border: 0 !important; border-radius: 4px !important; background: transparent !important; color: #667 !important; box-shadow: none !important; cursor: pointer !important; }
+.my-grid-row button.my-grid-dd:hover { background: #e4eaed !important; color: #1e6980 !important; }
+#my-grid-menu button { -webkit-appearance: none !important; appearance: none !important; box-sizing: border-box !important; display: block !important; width: 100% !important; height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 7px 10px !important; font: 13px/1.2 inherit !important; text-align: left !important; text-transform: none !important; letter-spacing: normal !important; border: 0 !important; border-radius: 6px !important; background: transparent !important; color: #222 !important; box-shadow: none !important; cursor: pointer !important; }
+#my-grid-menu button:hover { background: #eef3f5 !important; }
+#my-grid-menu button:last-child { color: #8a3a2f !important; }
