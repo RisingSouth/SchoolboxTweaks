@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Schoolbox UX Tweaks",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "Small UX improvements for staff using Schoolbox.",
   "permissions": [
     "storage",
@@ -45,6 +45,34 @@
       "js": [
         "tweak-config.js",
         "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://my.careywa.au/learning/assessments/*/status*"
+      ],
+      "js": [
+        "status-limit-main.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://my.careywa.au/learning/assessments/*/status*"
+      ],
+      "js": [
+        "status-limit-bridge.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://my.careywa.au/learning/assessments/*/status*"
+      ],
+      "js": [
+        "status-grid.js"
       ],
       "run_at": "document_idle"
     },

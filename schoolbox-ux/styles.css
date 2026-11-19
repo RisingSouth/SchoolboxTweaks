@@ -1759,3 +1759,43 @@ body.my-tweak-course-list .my-cl-reset {
 .my-grade-scale-wrap--needed select.my-grade-scale {
   border-color: #c0392b;
 }
+
+/* ---------------------------------------------------------------
+   Assessment status page: spreadsheet-style marking grid
+   (status-grid.js toggles body.my-status-grid)
+   --------------------------------------------------------------- */
+#my-grid-toggle { margin: 0 0 6px; }
+body.my-status-grid [data-assessment-status] ul.information-list > li[data-participant] {
+  display: grid !important;
+  grid-template-columns: minmax(180px, 240px) 70px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px !important;
+  border-bottom: 1px solid #e3e3e3;
+}
+body.my-status-grid li[data-participant][style*="display: none"] { display: none !important; }
+body.my-status-grid li[data-participant] > .column,
+body.my-status-grid li[data-participant] .row { margin: 0 !important; padding: 0 !important; width: auto !important; max-width: none !important; }
+body.my-status-grid li[data-participant] .small-12.card { display: flex; align-items: center; gap: 8px; }
+body.my-status-grid li[data-participant] .card h3 { font-size: 14px; margin: 0; }
+body.my-status-grid li[data-participant] .card img {
+  width: 32px; height: 32px; border-radius: 50%; transition: transform .12s; transform-origin: left center;
+  position: relative; z-index: 1;
+}
+body.my-status-grid li[data-participant] .card img:hover {
+  transform: scale(5); z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,.35); border-radius: 8px;
+}
+body.my-status-grid li[data-participant] .card .meta { font-size: 11px; white-space: nowrap; }
+body.my-status-grid li[data-participant] nav { display: none; }
+body.my-status-grid li[data-participant] form .row { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: center; }
+body.my-status-grid li[data-participant] form .column { width: auto !important; padding: 0 !important; float: none !important; }
+body.my-status-grid li[data-participant] form label { margin: 0; font-size: 0; }
+body.my-status-grid li[data-participant] form label input[name="mark"] { font-size: 14px; height: 30px; width: 90px; margin: 0; }
+body.my-status-grid li[data-participant] form .meta,
+body.my-status-grid li[data-participant] .resubmission-required { display: none; }
+body.my-status-grid li[data-participant] .ck-toolbar { display: none; }
+body.my-status-grid li[data-participant] .ck-editor__editable { min-height: 30px !important; max-height: 30px; overflow: hidden; padding: 2px 8px !important; }
+body.my-status-grid li[data-participant] .ck-editor__editable.ck-focused { max-height: 220px; overflow: auto; }
+.my-grid-clip { margin-left: 6px; font-size: 11px; }
+body.my-status-grid li[data-participant] ul.f-dropdown,
+body.my-status-grid li[data-participant] .ck-word-count { display: none !important; }

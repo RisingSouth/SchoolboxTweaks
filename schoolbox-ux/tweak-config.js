@@ -196,6 +196,21 @@ const TWEAK_GROUPS = [
       },
     ],
   },
+  {
+    name: "Assessment status page",
+    tweaks: [
+      {
+        id: "assessmentStatusGrid",
+        label: "Marking grid",
+        description: "Spreadsheet-style rows: type marks and feedback with Enter/arrows to move down, hover a portrait to enlarge it",
+      },
+      {
+        id: "assessmentStatusLimit",
+        label: "Show up to 50 students per page",
+        description: "Raises Schoolbox's 25-per-page cap on the assessment status page (takes effect on next page load)",
+      },
+    ],
+  },
 ];
 
 // Flat {id: true} defaults, derived from the groups above so there's
