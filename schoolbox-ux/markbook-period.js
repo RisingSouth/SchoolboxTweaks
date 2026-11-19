@@ -4,6 +4,9 @@
 // on every fresh load. Filters live in the URL (?5[4]=1&5[3]=1 ...), so
 // to "remember" a choice this adds those parameters on a fresh load.
 //
+// There is no button: applying filters in Schoolbox's own panel saves the
+// selection automatically.
+//
 // What is stored is a RULE, not a list of periods, so it doesn't go stale
 // when the year rolls over:
 //   default      - leave Schoolbox alone (nothing stored)
@@ -148,54 +151,34 @@
         }
       }
     }
-    addControl(c, rule);
+    watchApply();
   }
 
-  function addControl(c, rule) {
-    let tries = 0;
-    const timer = setInterval(() => {
-      tries++;
-      const toggle = document.querySelector(".my-filter-toggle");
-      const host = toggle ? toggle.parentElement : null;
-      if (!host && tries < 60) return;
-      clearInterval(timer);
-      if (document.getElementById("my-period-memory")) return;
-      const box = document.createElement("span");
-      box.id = "my-period-memory";
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "my-filter-toggle";
-      const render = (r) => {
-        btn.textContent = r ? "\u{1F4CC} Periods: " + describe(r) + " ✕" : lapsed ? "\u{1F4CC} Period changed: back to default" : "\u{1F4CC} Remember periods";
-        btn.title = r
-          ? "Click to forget and go back to Schoolbox's default periods"
-          : lapsed
-          ? "A newer academic period exists, so your saved selection was not applied. Click to remember the periods ticked now."
-          : "Remember the Due in Academic Period selection currently applied";
-        btn.classList.toggle("my-filter-toggle--active", !!r);
-      };
-      render(rule);
-      btn.addEventListener("click", () => {
-        if (rule) {
-          rule = null;
-          lapsed = false;
-          save(null, () => render(null));
-          return;
-        }
-        const fresh = findComponent() || c;
-        const r = infer(fresh, freshDefault);
-        if (!r || r.type === "default") {
-          btn.textContent = "Already using Schoolbox's default";
-          setTimeout(() => render(null), 2200);
-          return;
-        }
-        rule = r;
-        lapsed = false;
-        save(r, () => render(r));
-      });
-      box.appendChild(btn);
-      (host || document.body).insertBefore(box, toggle ? toggle.nextSibling : null);
-    }, 250);
+  // No button: whenever the teacher uses Schoolbox's own "Apply filters",
+  // the periods they ticked at that moment become the saved rule (the same
+  // rolling rules as above). Ticking just what Schoolbox pre-ticks on a
+  // fresh load clears the saved rule, i.e. goes back to the default.
+  function watchApply() {
+    const remember = () => {
+      const c = findComponent();
+      if (!c) return;
+      const r = infer(c, freshDefault);
+      if (r) save(r, () => {});
+    };
+    document.addEventListener(
+      "click",
+      (e) => {
+        if (e.target.closest && e.target.closest('#submit_button, [data-test="panel-apply-filters-button"]')) remember();
+      },
+      true
+    );
+    document.addEventListener(
+      "submit",
+      (e) => {
+        if (e.target && e.target.querySelector && e.target.querySelector("#filter_panel, .filter-component")) remember();
+      },
+      true
+    );
   }
 
   load(start);

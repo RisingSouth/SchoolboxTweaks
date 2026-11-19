@@ -72,7 +72,7 @@ const TWEAK_GROUPS = [
       {
         id: "markbookPeriodMemory",
         label: "Remember academic period filter",
-        description: "\"Remember periods\" button: re-applies your Due in Academic Period choice on each visit (current / current + previous / fixed), and drops it when a newer period appears",
+        description: "Remembers the Due in Academic Period you last applied and re-applies it on each visit (this year / current / current + previous / fixed); a fixed choice drops back to the default when a newer period appears",
       },
       {
         id: "markbookHeading",
