@@ -207,7 +207,7 @@ const TWEAK_GROUPS = [
       {
         id: "assessmentStatusGrid",
         label: "Marking grid",
-        description: "Spreadsheet-style rows: type marks and feedback with Enter/arrows to move down, hover a portrait to enlarge it",
+        description: "Spreadsheet-style marking page: one row per student, type marks and feedback with Enter/arrow keys, A/N/S or the ▾ menu for Absent/Not Assessed/Not Submitted, stats, Unmarked/Drafts filters, per-row Publish, hover portraits. Staff can switch back to Classic on the page",
       },
       {
         id: "assessmentStatusLimit",
