@@ -8,6 +8,8 @@
 // when the year rolls over:
 //   default      - leave Schoolbox alone (nothing stored)
 //   current      - the current period only
+//   year         - every period in the current year (2026-1 + 2026-2, then
+//                  just 2027-1 once 2027 starts - never drags in 2026-2)
 //   currentPrev  - the current period and the one before it
 //   fixed        - exactly the periods that were ticked. Only used for
 //                  anything else, and it LAPSES (falls back to Schoolbox's
@@ -56,6 +58,7 @@
   function describe(rule) {
     if (!rule) return "";
     if (rule.type === "current") return "current period";
+    if (rule.type === "year") return "this year";
     if (rule.type === "currentPrev") return "current + previous period";
     return "fixed: " + rule.labels.join(", ");
   }
@@ -81,6 +84,9 @@
     const prev = c.periods[idx + 1];
     if (freshDefault && sameSet(labels, freshDefault.map((p) => p.label))) return { type: "default" };
     if (sameSet(labels, [cur.label])) return { type: "current" };
+    const yearOf = (p) => Math.floor(p.rank / 10);
+    const thisYear = c.periods.filter((p) => yearOf(p) === yearOf(cur)).map((p) => p.label);
+    if (sameSet(labels, thisYear)) return { type: "year" };
     if (prev && sameSet(labels, [cur.label, prev.label])) return { type: "currentPrev" };
     return { type: "fixed", labels, seen: c.periods.map((p) => p.label) };
   }
@@ -89,6 +95,7 @@
     const cur = currentFrom(c.periods, ticked);
     const idx = c.periods.indexOf(cur);
     if (rule.type === "current") return [cur];
+    if (rule.type === "year") return c.periods.filter((p) => Math.floor(p.rank / 10) === Math.floor(cur.rank / 10));
     if (rule.type === "currentPrev") return [cur].concat(c.periods[idx + 1] ? [c.periods[idx + 1]] : []);
     if (rule.type === "fixed") {
       // a period newer than anything seen when this was saved => lapse
