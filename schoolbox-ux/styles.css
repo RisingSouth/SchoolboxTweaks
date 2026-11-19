@@ -1827,18 +1827,13 @@ body.my-status-grid .my-grid-row .ck-editor:focus-within { min-height: 30px; }
 #my-grid-menu button:hover { background: #eef3f5; }
 #my-grid-menu button:last-child { color: #8a3a2f; border-top: 1px solid #eef1f3; border-radius: 0 0 6px 6px; margin-top: 2px; }
 
-/* Schoolbox's own Publish / Saved-as-draft bar, moved into the Status cell */
+/* Schoolbox's own Publish / Saved-as-draft bar, moved into the Status cell.
+   Only a real draft shows anything; published rows keep Schoolbox's own
+   display:none on the bar. */
 .my-grid-status { display: flex !important; align-items: center; gap: 8px; }
-.my-grid-status .component-action, .my-grid-status .component-action section { display: contents !important; margin: 0 !important; padding: 0 !important; height: auto !important; }
+.my-grid-status .component-action:not([data-published]) { margin: 0 !important; padding: 0 !important; height: auto !important; }
+.my-grid-status .component-action:not([data-published]) section { display: flex !important; margin: 0 !important; padding: 0 !important; height: auto !important; }
 .my-grid-status .component-action-info, .my-grid-status [data-draft="drafted"] { display: none !important; }
-.my-grid-status a.button[data-draft="publish"] { display: inline-block !important; margin: 0 !important; padding: 3px 12px !important; height: auto !important; min-height: 0 !important; line-height: 1.3 !important; font-size: 11px !important; border-radius: 10px !important; cursor: pointer; }
+.my-grid-status a.button[data-draft="publish"]:not([style*="none"]) { display: inline-block !important; margin: 0 !important; padding: 3px 12px !important; height: auto !important; min-height: 0 !important; line-height: 1.3 !important; font-size: 11px !important; border-radius: 10px !important; cursor: pointer; }
 .my-grid-pill--draft { background: #fdecd5; color: #8a4b00; }
-
-/* Grid | Classic switch */
-.my-seg { display: inline-flex; border: 1px solid #c9d0d4; border-radius: 13px; overflow: hidden; background: #fff; vertical-align: middle; }
-.my-seg-btn { height: 24px; line-height: 22px; padding: 0 14px; margin: 0; font-size: 12px; border: none; border-radius: 0; background: transparent; color: #556; cursor: pointer; }
-.my-seg-btn + .my-seg-btn { border-left: 1px solid #c9d0d4; }
-.my-seg-btn:hover { background: #f1f5f7; }
-.my-seg-btn.on { background: #1e6980; color: #fff; cursor: default; }
-.my-grid-classic-bar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 0 8px; }
-.my-grid-classic-hint { font-size: 12px; color: #889; }
+.my-grid-pill--published { background: #e0f2e4; color: #1f6b34; }

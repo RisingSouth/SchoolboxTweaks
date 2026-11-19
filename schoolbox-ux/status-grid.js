@@ -339,15 +339,28 @@
   }
   const COLS = "28px 190px 96px 48px minmax(0, 1fr) 200px";
 
-  // A row is a draft when Schoolbox is offering a Publish button for it.
+  // Per-row publish state, read from Schoolbox's own action bar:
+  //   published - bar carries data-published (bar and Publish link are hidden)
+  //   draft     - a visible Publish link is on offer
+  //   none      - no bar (nothing marked yet)
+  function publishState(li) {
+    const bar = li.querySelector("[data-action-bar]");
+    if (!bar) return "none";
+    if (bar.hasAttribute("data-published")) return "published";
+    const a = bar.querySelector('a[data-draft="publish"]');
+    if (a && !/display\s*:\s*none/.test(a.getAttribute("style") || "")) return "draft";
+    return "none";
+  }
+
   function refreshDraft(li) {
-    const isDraft = !!li.querySelector('a[data-draft="publish"]');
-    const pill = li.querySelector(".my-grid-pill");
-    const flag = isDraft ? "1" : "0";
+    const state = publishState(li);
+    const flag = state === "draft" ? "1" : "0";
     if (li.getAttribute("data-my-draft") !== flag) li.setAttribute("data-my-draft", flag);
+    const pill = li.querySelector(".my-grid-pill");
     if (pill) {
-      setText(pill, isDraft ? "Draft" : statusText(li));
-      pill.classList.toggle("my-grid-pill--draft", isDraft);
+      setText(pill, state === "draft" ? "Draft" : state === "published" ? "Published" : statusText(li));
+      pill.classList.toggle("my-grid-pill--draft", state === "draft");
+      pill.classList.toggle("my-grid-pill--published", state === "published");
     }
   }
 
@@ -630,7 +643,7 @@
             addChrome();
           }
         });
-      }).observe(document.body, { childList: true, subtree: true });
+      }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "data-published"] });
       setTimeout(ensureAllRows, 1500);
     });
   }
