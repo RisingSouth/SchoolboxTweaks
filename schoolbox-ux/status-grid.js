@@ -120,128 +120,294 @@
     true
   );
 
-  // Hover portrait: swap the 64px image for the 192px one on first hover.
-  document.addEventListener(
-    "mouseover",
-    (e) => {
-      const img = e.target.closest && e.target.closest(".my-grid-portrait img");
-      if (img && img.src.includes("size=square64")) {
-        img.src = img.src.replace("size=square64", "size=square192");
-      }
-    },
-    true
-  );
+  // ---- hover portrait card (floats outside the row, never inside it) ----
+  let pop = null;
+  function showPop(a) {
+    const li = a.closest(ROW);
+    if (!li) return;
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.id = "my-grid-pop";
+      document.body.appendChild(pop);
+    }
+    const id = li.getAttribute("data-participant");
+    const m = markOf(li);
+    pop.textContent = "";
+    const big = document.createElement("img");
+    big.src = "/portrait.php?id=" + id + "&size=square192";
+    big.alt = "";
+    const nm = document.createElement("div");
+    nm.className = "nm";
+    nm.textContent = li.getAttribute("data-participant-name") || "";
+    const r1 = document.createElement("div");
+    r1.className = "r2";
+    r1.innerHTML = "<span>Status</span><span></span>";
+    r1.lastChild.textContent = statusText(li);
+    const r2 = document.createElement("div");
+    r2.className = "r2";
+    r2.innerHTML = "<span>Mark</span><span></span>";
+    r2.lastChild.textContent = m && m.value ? m.value : "-";
+    pop.append(big, nm, r1, r2);
+    const b = a.getBoundingClientRect();
+    pop.style.display = "block";
+    const h = pop.offsetHeight;
+    pop.style.left = Math.min(b.right + 10, window.innerWidth - 230) + "px";
+    pop.style.top = Math.max(8, Math.min(b.top - 20, window.innerHeight - h - 8)) + "px";
+  }
+  document.addEventListener("mouseover", (e) => {
+    const a = e.target.closest && e.target.closest(".my-grid-portrait");
+    if (a) showPop(a);
+  });
+  document.addEventListener("mouseout", (e) => {
+    const a = e.target.closest && e.target.closest(".my-grid-portrait");
+    if (a && pop) pop.style.display = "none";
+  });
 
-  // Applies inline !important styles: these beat any stylesheet rule,
-  // including Schoolbox's own, which we can't see or rely on.
+  // ---- row data helpers ----
+  function statusText(li) {
+    const l = li.querySelector("[data-assessment-status-text]");
+    return l ? l.textContent.trim() : "";
+  }
+  function markNum(li) {
+    const m = markOf(li);
+    const v = m ? parseFloat(m.value) : NaN;
+    const max = m ? parseFloat(m.getAttribute("data-validation-limit")) : NaN;
+    return { v: isNaN(v) ? null : v, max: isNaN(max) ? null : max, raw: m ? m.value.trim() : "" };
+  }
+
+  function refreshRow(li) {
+    const pct = li.querySelector(".my-grid-pct");
+    if (!pct) return;
+    const { v, max, raw } = markNum(li);
+    const bad = v !== null && max !== null && (v < 0 || v > max);
+    setText(pct, v !== null && max && !bad ? Math.round((v / max) * 100) + "%" : "");
+    const m = markOf(li);
+    if (m) m.classList.toggle("my-grid-bad", bad);
+    li.setAttribute("data-my-empty", raw === "" ? "1" : "0");
+  }
+
+  // Writing identical text still counts as a DOM mutation, which would
+  // re-trigger the observer below forever - so only write on change.
+  const setText = (e, t) => {
+    if (e && e.textContent !== t) e.textContent = t;
+  };
+
+  const el = (tag, cls, txt) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt != null) e.textContent = txt;
+    return e;
+  };
+
+  let statsEl = null;
+  function refreshStats() {
+    if (!statsEl) return;
+    const rows = Array.from(document.querySelectorAll(ROW));
+    const nums = rows.map(markNum);
+    const vals = nums.filter((x) => x.v !== null && (x.max === null || (x.v >= 0 && x.v <= x.max))).map((x) => x.v);
+    const max = (nums.find((x) => x.max) || {}).max;
+    const marked = nums.filter((x) => x.raw !== "").length;
+    const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    const set = (k, t) => {
+      const e = statsEl.querySelector('[data-k="' + k + '"]');
+      setText(e, t);
+    };
+    set("marked", marked + " / " + rows.length);
+    set("avg", avg === null ? "-" : Math.round(avg * 10) / 10 + (max ? " (" + Math.round((avg / max) * 100) + "%)" : ""));
+    set("range", vals.length ? Math.min(...vals) + " – " + Math.max(...vals) : "-");
+    set("unmarked", String(rows.length - marked));
+    document.querySelectorAll(".my-grid-head [data-k=max]").forEach((h) => setText(h, max ? "Mark /" + max : "Mark"));
+  }
+
+  // ---- filter chips / sort ----
+  let filter = "all";
+  let sortMode = "roll";
+  function applyView() {
+    const list = document.querySelector("[data-assessment-status] ul.information-list");
+    if (!list) return;
+    const rows = Array.from(list.querySelectorAll(":scope > " + ROW));
+    rows.forEach((li) => li.classList.toggle("my-grid-hidden", filter === "unmarked" && li.getAttribute("data-my-empty") !== "1"));
+    const idx = (li) => +li.getAttribute("data-my-idx");
+    const sorted = rows.slice().sort((a, b) => {
+      if (sortMode === "roll") return idx(a) - idx(b);
+      const ma = markNum(a).v, mb = markNum(b).v;
+      const d = (mb === null ? -1e9 : mb) - (ma === null ? -1e9 : ma);
+      return sortMode === "high" ? d || idx(a) - idx(b) : -d || idx(a) - idx(b);
+    });
+    sorted.forEach((li) => list.appendChild(li));
+    document.querySelectorAll("#my-grid-bar [data-f]").forEach((c) => c.classList.toggle("on", c.getAttribute("data-f") === filter));
+    const sb = document.getElementById("my-grid-sort");
+    if (sb) setText(sb, { roll: "Class order", high: "Mark: high to low", low: "Mark: low to high" }[sortMode]);
+  }
+
+  // ---- build rows ----
   function S(el, css) {
     if (!el) return;
     Object.keys(css).forEach((k) => el.style.setProperty(k, css[k], "important"));
   }
+  const COLS = "28px 190px 96px 48px minmax(0, 1fr) 118px";
 
-  // Builds our own row inside the <li>: [name cell | the real <form>].
-  // The form is MOVED (not cloned), so Schoolbox's validation, draft save
-  // and publish keep working. Everything else in the form (hints,
-  // resubmission checkbox, action bar, combobox arrow) is hidden.
   function decorate() {
-    document.querySelectorAll(ROW).forEach((li) => {
+    const all = Array.from(document.querySelectorAll(ROW));
+    all.forEach((li, i) => {
       if (li.querySelector(":scope > .my-grid-row")) return;
       const form = li.querySelector("form[data-feedback-form]");
       const frow = form && form.querySelector(":scope > .row");
       if (!frow || frow.children.length < 2) return;
+      li.setAttribute("data-my-idx", String(i));
 
       const id = li.getAttribute("data-participant");
       const name = li.getAttribute("data-participant-name") || "";
       const submission = li.querySelector("a[data-inline-grader]");
       const href = (submission && submission.getAttribute("href")) || "/search/user/" + id;
-      const tick = li.querySelector(".progress-tick");
-      const lbl = li.querySelector("[data-assessment-status-text]");
       const ta = form.querySelector("textarea[data-feedback-comment]");
-      const n = ta ? (ta.value.match(/fetch\.php\?hash=/g) || []).length : 0;
+      const nClip = ta ? (ta.value.match(/fetch\.php\?hash=/g) || []).length : 0;
+      const status = li.getAttribute("data-status") || "";
 
-      const cell = document.createElement("div");
-      cell.className = "my-grid-name";
-      const pa = document.createElement("a");
-      pa.className = "my-grid-portrait";
+      const num = el("span", "my-grid-num", String(i + 1));
+      const cell = el("div", "my-grid-name");
+      const pa = el("a", "my-grid-portrait");
       pa.href = "/search/user/" + id;
-      pa.title = "View profile";
-      const img = document.createElement("img");
+      pa.setAttribute("aria-label", "Profile: " + name);
+      const img = el("img");
       img.src = "/portrait.php?id=" + id + "&size=square64";
       img.alt = "";
       pa.appendChild(img);
-      const text = document.createElement("div");
-      text.className = "my-grid-text";
-      const nm = document.createElement("a");
-      nm.className = "my-grid-student";
+      const nm = el("a", "my-grid-student", name);
       nm.href = href;
       nm.title = "View and mark submission";
-      nm.textContent = name;
-      const sub = document.createElement("div");
-      sub.className = "my-grid-sub";
-      if (tick) sub.appendChild(tick.cloneNode(true));
-      sub.appendChild(document.createTextNode(lbl ? lbl.textContent.trim() : ""));
-      if (n) {
-        const c = document.createElement("span");
-        c.className = "my-grid-clip";
-        c.title = n + " attachment" + (n === 1 ? "" : "s");
-        c.textContent = "\u{1F4CE}" + n;
-        sub.appendChild(c);
+      cell.append(pa, nm);
+      if (nClip) {
+        const c = el("span", "my-grid-clip", "\u{1F4CE}" + nClip);
+        c.title = nClip + " attachment" + (nClip === 1 ? "" : "s");
+        cell.appendChild(c);
       }
-      text.append(nm, sub);
-      cell.append(pa, text);
+      const pct = el("span", "my-grid-pct");
+      const pill = el("span", "my-grid-pill my-grid-pill--" + status.replace(/[^a-z-]/g, ""), statusText(li));
+      const stCell = el("span", "my-grid-status");
+      stCell.appendChild(pill);
 
-      // hide Schoolbox's own card/name column(s)
       Array.from(li.children).forEach((c) => {
         if (c.classList.contains("column")) S(c, { display: "none" });
       });
+      S(li, { "list-style": "none", padding: "0", margin: "0", height: "auto", float: "none", width: "auto" });
 
-      S(li, { "list-style": "none", padding: "0", height: "auto" });
-      const row = document.createElement("div");
-      row.className = "my-grid-row";
-      S(row, {
-        display: "grid",
-        "grid-template-columns": "240px minmax(0, 1fr)",
-        gap: "10px",
-        "align-items": "center",
-        width: "100%",
-        "box-sizing": "border-box",
-      });
-      row.append(cell, form);
+      const row = el("div", "my-grid-row");
+      S(row, { display: "grid", "grid-template-columns": COLS, gap: "8px", "align-items": "center", width: "100%", "box-sizing": "border-box" });
+      row.append(num, cell, form, pct, stCell);
       li.appendChild(row);
 
-      // the form: block, only its .row visible
-      S(form, { display: "block", margin: "0", padding: "0", width: "auto", float: "none", "min-width": "0" });
+      // The real form joins the row's grid directly (display: contents),
+      // so its mark box and editor become grid cells 3 and 5.
+      S(form, { display: "contents" });
       Array.from(form.children).forEach((c) => {
         if (c !== frow) S(c, { display: "none" });
       });
-      S(frow, {
-        display: "grid",
-        "grid-template-columns": "120px minmax(0, 1fr)",
-        gap: "10px",
-        "align-items": "center",
-        margin: "0",
-        padding: "0",
-        width: "auto",
-        "max-width": "none",
-      });
-      const reset = { float: "none", width: "auto", "max-width": "none", margin: "0", padding: "0", "min-width": "0" };
+      S(frow, { display: "contents" });
       const markCol = frow.children[0];
       const commentCol = frow.children[1];
-      S(markCol, reset);
-      S(commentCol, reset);
+      S(markCol, { display: "contents" });
+      S(commentCol, { display: "contents" });
       Array.from(markCol.children).forEach((c) => {
         if (c.tagName !== "LABEL") S(c, { display: "none" });
       });
       const lab = markCol.querySelector("label");
-      S(lab, { margin: "0", "font-size": "0", "line-height": "0" });
-      const mark = markCol.querySelector('input[name="mark"]');
-      S(mark, { "font-size": "14px", height: "32px", width: "110px", margin: "0", padding: "2px 8px" });
+      S(lab, { display: "block", margin: "0", "font-size": "0", "line-height": "0", "grid-column": "3", "grid-row": "1", width: "100%" });
+      S(lab && lab.querySelector(".combobox"), { display: "block", width: "100%" });
+      S(markCol.querySelector('input[name="mark"]'), { "font-size": "13px", height: "30px", width: "100%", margin: "0", padding: "0 8px", "text-align": "right" });
       Array.from(commentCol.children).forEach((c) => {
         if (!c.classList.contains("ck-editor") && c.tagName !== "TEXTAREA") S(c, { display: "none" });
       });
-      S(commentCol.querySelector(".ck-editor"), { width: "100%", "max-width": "none", margin: "0" });
+      S(commentCol.querySelector(".ck-editor"), { "grid-column": "5", "grid-row": "1", width: "100%", "max-width": "none", margin: "0" });
+      S(num, { "grid-column": "1", "grid-row": "1" });
+      S(cell, { "grid-column": "2", "grid-row": "1" });
+      S(pct, { "grid-column": "4", "grid-row": "1" });
+      S(stCell, { "grid-column": "6", "grid-row": "1" });
+      refreshRow(li);
     });
+    refreshStats();
   }
+
+  // the chrome around the grid: stats, chips, header row, key hints
+  function addChrome() {
+    if (document.getElementById("my-grid-bar")) return;
+    const section = document.querySelector("section[data-assessment-status]");
+    const list = section && section.querySelector("ul.information-list");
+    if (!list || !document.querySelector(ROW)) return;
+
+    const bar = el("div", "");
+    bar.id = "my-grid-bar";
+    statsEl = el("div", "my-grid-stats");
+    [["marked", "Marked"], ["avg", "Average"], ["range", "Range"], ["unmarked", "Unmarked"]].forEach(([k, l]) => {
+      const s = el("div", "my-grid-stat");
+      s.append(el("span", "", l));
+      const v = el("strong", "", "-");
+      v.setAttribute("data-k", k);
+      s.append(v);
+      statsEl.appendChild(s);
+    });
+    const chips = el("div", "my-grid-chips");
+    [["all", "All"], ["unmarked", "Unmarked"]].forEach(([f, l]) => {
+      const c = el("button", "my-grid-chip", l);
+      c.type = "button";
+      c.setAttribute("data-f", f);
+      c.addEventListener("click", () => {
+        filter = f;
+        applyView();
+      });
+      chips.appendChild(c);
+    });
+    chips.appendChild(el("span", "my-grid-spacer"));
+    const sort = el("button", "my-grid-chip", "Class order");
+    sort.type = "button";
+    sort.id = "my-grid-sort";
+    sort.addEventListener("click", () => {
+      sortMode = sortMode === "roll" ? "high" : sortMode === "high" ? "low" : "roll";
+      applyView();
+    });
+    chips.appendChild(sort);
+    const tg = document.getElementById("my-grid-toggle");
+    if (tg) chips.appendChild(tg);
+    bar.append(statsEl, chips);
+
+    const head = el("div", "my-grid-head");
+    S(head, { display: "grid", "grid-template-columns": COLS, gap: "8px", "align-items": "center" });
+    [["#", ""], ["Student", ""], ["Mark", "max"], ["%", ""], ["Feedback", ""], ["Status", ""]].forEach(([t, k], i) => {
+      const h = el("span", i === 2 || i === 3 ? "my-grid-right" : "", t);
+      if (k) h.setAttribute("data-k", k);
+      head.appendChild(h);
+    });
+    const hint = el("p", "my-grid-hint");
+    hint.innerHTML =
+      "<kbd>Enter</kbd> next student (same column) · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line in feedback · <kbd>Tab</kbd> mark to feedback · <kbd>Esc</kbd> stop editing · <kbd>A</kbd> in a mark = Absent · paste a column to fill down";
+    section.parentElement.insertBefore(bar, section);
+    section.parentElement.insertBefore(head, section);
+    section.appendChild(hint);
+    list.classList.add("my-grid-list");
+    S(list, { margin: "0", padding: "0" });
+    applyView();
+  }
+
+  document.addEventListener("input", (e) => {
+    const m = e.target;
+    if (m.matches && m.matches('input[name="mark"]')) {
+      const li = m.closest(ROW);
+      if (li) {
+        refreshRow(li);
+        refreshStats();
+      }
+    }
+  }, true);
+  document.addEventListener("change", (e) => {
+    const m = e.target;
+    if (m.matches && m.matches('input[name="mark"]')) {
+      const li = m.closest(ROW);
+      if (li) {
+        refreshRow(li);
+        refreshStats();
+      }
+    }
+  }, true);
 
   // Fallback if the 50-row override didn't take: un-hide every row.
   function ensureAllRows() {
@@ -260,27 +426,27 @@
 
   function addToggle() {
     if (document.getElementById("my-grid-toggle")) return;
-    const host = document.querySelector("[data-participant-search]");
-    const anchor = host && (host.closest(".row, div") || host.parentElement);
-    if (!anchor) return;
-    const b = document.createElement("button");
+    const b = el("button", "my-grid-chip");
     b.id = "my-grid-toggle";
     b.type = "button";
-    b.className = "button tiny";
     b.addEventListener("click", () => {
       try {
         localStorage.setItem("sbux-grid", on ? "off" : "on");
       } catch (e) {}
       location.reload();
     });
-    anchor.parentElement.insertBefore(b, anchor);
+    // parked in the chip bar once it exists (addChrome moves it); until
+    // then, above the search box
+    const host = document.querySelector("[data-participant-search]");
+    const anchor = host && (host.closest(".row, div") || host.parentElement);
+    if (anchor) anchor.parentElement.insertBefore(b, anchor);
     apply();
   }
 
   function apply() {
     document.body.classList.toggle("my-status-grid", on);
     const b = document.getElementById("my-grid-toggle");
-    if (b) b.textContent = on ? "Grid view: on (click for classic)" : "Classic view (click for grid)";
+    setText(b, on ? "Classic view" : "Grid view");
   }
 
   function init() {
@@ -289,11 +455,23 @@
       if (!r.tweaksEnabled || t.assessmentStatusGrid === false) return;
       apply();
       addToggle();
-      if (on) decorate();
+      if (on) {
+        decorate();
+        addChrome();
+      }
       ensureAllRows();
+      let pending = false;
       new MutationObserver(() => {
-        addToggle();
-        if (on) decorate();
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(() => {
+          pending = false;
+          addToggle();
+          if (on) {
+            decorate();
+            addChrome();
+          }
+        });
       }).observe(document.body, { childList: true, subtree: true });
       setTimeout(ensureAllRows, 1500);
     });
