@@ -54,6 +54,77 @@
     return focusCell(rows[i], kind);
   }
 
+  // True if the caret (collapsed selection) is on the first (down=false)
+  // or last (down=true) visual line of the editable, so arrow keys can
+  // hop to the neighbouring student without breaking cursor movement
+  // inside a multi-line comment.
+  function caretOnEdge(editable, down) {
+    const sel = window.getSelection();
+    if (!editable || !sel || !sel.rangeCount || !sel.isCollapsed) return false;
+    if (!editable.textContent.trim()) return true;
+    const r = sel.getRangeAt(0);
+    const edge = document.createRange();
+    edge.selectNodeContents(editable);
+    edge.collapse(!down);
+    const top = (rg) => {
+      const rects = rg.getClientRects();
+      return rects.length ? rects[0].top : null;
+    };
+    const a = top(r);
+    const b = top(edge);
+    if (a === null || b === null) {
+      // boundary positions can report no rect: fall back to "at the very edge"
+      return r.compareBoundaryPoints(down ? Range.END_TO_END : Range.START_TO_START, edge) === 0;
+    }
+    return Math.abs(a - b) < 4;
+  }
+
+  // ---- ▾ menu beside each mark: Absent / Not Assessed / Not Submitted ----
+  let menu = null;
+  let menuFor = null;
+  let menuOpenedAt = 0;
+  function closeMenu() {
+    if (menu) menu.style.display = "none";
+    menuFor = null;
+  }
+  function openMenu(btn, input) {
+    if (!menu) {
+      menu = document.createElement("div");
+      menu.id = "my-grid-menu";
+      ["Absent", "Not Assessed", "Not Submitted", "Clear mark"].forEach((label) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = label;
+        b.setAttribute("data-v", label === "Clear mark" ? "" : label);
+        b.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus
+        b.addEventListener("click", () => {
+          if (menuFor) {
+            setValue(menuFor, b.getAttribute("data-v"));
+            menuFor.focus();
+          }
+          closeMenu();
+        });
+        menu.appendChild(b);
+      });
+      document.body.appendChild(menu);
+      document.addEventListener("mousedown", (e) => {
+        if (menu.style.display !== "none" && !menu.contains(e.target) && !(e.target.closest && e.target.closest(".my-grid-dd"))) closeMenu();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeMenu();
+      });
+      window.addEventListener("scroll", () => { if (Date.now() - menuOpenedAt > 400) closeMenu(); }, true);
+    }
+    if (menuFor === input && menu.style.display === "block") return closeMenu();
+    menuFor = input;
+    menuOpenedAt = Date.now();
+    const r = btn.getBoundingClientRect();
+    menu.style.display = "block";
+    const h = menu.offsetHeight;
+    menu.style.left = Math.max(8, r.right - menu.offsetWidth) + "px";
+    menu.style.top = (r.bottom + h + 8 > window.innerHeight ? r.top - h - 4 : r.bottom + 4) + "px";
+  }
+
   document.addEventListener(
     "keydown",
     (e) => {
@@ -65,9 +136,11 @@
       if (t.matches('input[name="mark"]')) {
         if (e.key === "Enter" || e.key === "ArrowDown") {
           e.preventDefault();
+          e.stopPropagation(); // keep Schoolbox's own combobox list shut
           move(li, "mark", 1);
         } else if (e.key === "ArrowUp") {
           e.preventDefault();
+          e.stopPropagation();
           move(li, "mark", -1);
         } else if (e.key === "Tab" && !e.shiftKey) {
           if (focusCell(li, "feedback")) e.preventDefault();
@@ -83,12 +156,16 @@
           e.preventDefault();
           e.stopImmediatePropagation(); // pre-empt CKEditor's own Enter
           move(li, "feedback", 1);
-        } else if (e.key === "ArrowDown" && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault();
-          move(li, "feedback", 1);
-        } else if (e.key === "ArrowUp" && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault();
-          move(li, "feedback", -1);
+        } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !e.shiftKey && !e.altKey) {
+          const down = e.key === "ArrowDown";
+          // Ctrl/Cmd always jumps; plain arrows jump only from the last
+          // (down) / first (up) line, otherwise they move the cursor as usual.
+          if (e.ctrlKey || e.metaKey || caretOnEdge(t.closest(".ck-editor__editable"), down)) {
+            if (move(li, "feedback", down ? 1 : -1)) {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+            }
+          }
         } else if (e.key === "Tab" && e.shiftKey) {
           if (focusCell(li, "mark")) e.preventDefault();
         } else if (e.key === "Escape") {
@@ -324,7 +401,22 @@
         const lim = markInput.getAttribute("data-validation-limit");
         if (lim) markInput.setAttribute("placeholder", "/" + lim);
       }
-      S(markCol.querySelector('input[name="mark"]'), { "font-size": "13px", height: "30px", width: "100%", margin: "0", padding: "0 8px", "text-align": "right" });
+      if (markInput && lab) {
+        const dd = el("button", "my-grid-dd", "\u25BE");
+        dd.type = "button";
+        dd.tabIndex = -1;
+        dd.title = "Absent / Not Assessed / Not Submitted";
+        dd.setAttribute("aria-label", "Mark status options");
+        dd.addEventListener("mousedown", (e) => e.preventDefault());
+        dd.addEventListener("click", (e) => {
+          e.preventDefault();
+          openMenu(dd, markInput);
+        });
+        const wrap = lab.querySelector(".combobox");
+        S(wrap, { position: "relative" });
+        (wrap || lab).appendChild(dd);
+      }
+      S(markCol.querySelector('input[name="mark"]'), { "font-size": "13px", height: "30px", width: "100%", margin: "0", padding: "0 26px 0 8px", "text-align": "right" });
       Array.from(commentCol.children).forEach((c) => {
         if (!c.classList.contains("ck-editor") && c.tagName !== "TEXTAREA") S(c, { display: "none" });
       });
