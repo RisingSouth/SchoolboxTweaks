@@ -302,6 +302,7 @@
     set("avg", avg === null ? "-" : isPct ? r1(avg) + "%" : r1(avg) + (max ? " (" + Math.round((avg / max) * 100) + "%)" : ""));
     set("range", vals.length ? r1(Math.min(...vals)) + " – " + r1(Math.max(...vals)) + (isPct ? "%" : "") : "-");
     set("unmarked", String(rows.length - marked));
+    set("draft", String(rows.filter((r) => r.getAttribute("data-my-draft") === "1").length));
     document.querySelectorAll(".my-grid-head [data-k=max]").forEach((h) => setText(h, isPct ? "Mark %" : max ? "Mark /" + max : "Mark"));
   }
 
@@ -312,7 +313,12 @@
     const list = document.querySelector("[data-assessment-status] ul.information-list");
     if (!list) return;
     const rows = Array.from(list.querySelectorAll(":scope > " + ROW));
-    rows.forEach((li) => li.classList.toggle("my-grid-hidden", filter === "unmarked" && li.getAttribute("data-my-empty") !== "1"));
+    rows.forEach((li) =>
+      li.classList.toggle(
+        "my-grid-hidden",
+        (filter === "unmarked" && li.getAttribute("data-my-empty") !== "1") || (filter === "draft" && li.getAttribute("data-my-draft") !== "1")
+      )
+    );
     const idx = (li) => +li.getAttribute("data-my-idx");
     const sorted = rows.slice().sort((a, b) => {
       if (sortMode === "roll") return idx(a) - idx(b);
@@ -331,7 +337,19 @@
     if (!el) return;
     Object.keys(css).forEach((k) => el.style.setProperty(k, css[k], "important"));
   }
-  const COLS = "28px 190px 96px 48px minmax(0, 1fr) 118px";
+  const COLS = "28px 190px 96px 48px minmax(0, 1fr) 200px";
+
+  // A row is a draft when Schoolbox is offering a Publish button for it.
+  function refreshDraft(li) {
+    const isDraft = !!li.querySelector('a[data-draft="publish"]');
+    const pill = li.querySelector(".my-grid-pill");
+    const flag = isDraft ? "1" : "0";
+    if (li.getAttribute("data-my-draft") !== flag) li.setAttribute("data-my-draft", flag);
+    if (pill) {
+      setText(pill, isDraft ? "Draft" : statusText(li));
+      pill.classList.toggle("my-grid-pill--draft", isDraft);
+    }
+  }
 
   function decorate() {
     const all = Array.from(document.querySelectorAll(ROW));
@@ -373,6 +391,10 @@
       const stCell = el("span", "my-grid-status");
       stCell.appendChild(pill);
 
+      // Schoolbox's own per-student Publish / "Saved as Draft" bar: move the
+      // real element (keeps its handlers) into the Status cell.
+      const bar = li.querySelector("[data-action-bar]");
+      if (bar) stCell.appendChild(bar);
       Array.from(li.children).forEach((c) => {
         if (c.classList.contains("column")) S(c, { display: "none" });
       });
@@ -434,6 +456,7 @@
       S(stCell, { "grid-column": "6", "grid-row": "1" });
       refreshRow(li);
     });
+    all.forEach(refreshDraft);
     refreshStats();
   }
 
@@ -447,7 +470,7 @@
     const bar = el("div", "");
     bar.id = "my-grid-bar";
     statsEl = el("div", "my-grid-stats");
-    [["marked", "Marked"], ["avg", "Average"], ["range", "Range"], ["unmarked", "Unmarked"]].forEach(([k, l]) => {
+    [["marked", "Marked"], ["avg", "Average"], ["range", "Range"], ["unmarked", "Unmarked"], ["draft", "Unpublished"]].forEach(([k, l]) => {
       const s = el("div", "my-grid-stat");
       s.append(el("span", "", l));
       const v = el("strong", "", "-");
@@ -456,7 +479,7 @@
       statsEl.appendChild(s);
     });
     const chips = el("div", "my-grid-chips");
-    [["all", "All"], ["unmarked", "Unmarked"]].forEach(([f, l]) => {
+    [["all", "All"], ["unmarked", "Unmarked"], ["draft", "Drafts"]].forEach(([f, l]) => {
       const c = el("button", "my-grid-chip", l);
       c.type = "button";
       c.setAttribute("data-f", f);
@@ -493,6 +516,7 @@
     section.parentElement.insertBefore(head, section);
     section.appendChild(hint);
     list.classList.add("my-grid-list");
+    refreshStats();
     S(list, { margin: "0", padding: "0" });
     applyView();
   }
