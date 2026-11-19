@@ -247,19 +247,24 @@
     const l = li.querySelector("[data-assessment-status-text]");
     return l ? l.textContent.trim() : "";
   }
+  // Percentage tasks (e.g. marks pulled in from a rubric) store the mark as
+  // text like "59.07 %" and validate with withinPercentageRange.
+  function isPctInput(m) {
+    return !!m && (m.title === "Percentage" || /%\s*$/.test(m.value));
+  }
   function markNum(li) {
     const m = markOf(li);
     const v = m ? parseFloat(m.value) : NaN;
     const max = m ? parseFloat(m.getAttribute("data-validation-limit")) : NaN;
-    return { v: isNaN(v) ? null : v, max: isNaN(max) ? null : max, raw: m ? m.value.trim() : "" };
+    return { v: isNaN(v) ? null : v, max: isNaN(max) ? null : max, raw: m ? m.value.trim() : "", pct: isPctInput(m) };
   }
 
   function refreshRow(li) {
     const pct = li.querySelector(".my-grid-pct");
     if (!pct) return;
-    const { v, max, raw } = markNum(li);
+    const { v, max, raw, pct: isPct } = markNum(li);
     const bad = v !== null && max !== null && (v < 0 || v > max);
-    setText(pct, v !== null && max && !bad ? Math.round((v / max) * 100) + "%" : "");
+    setText(pct, !isPct && v !== null && max && !bad ? Math.round((v / max) * 100) + "%" : "");
     const m = markOf(li);
     if (m) m.classList.toggle("my-grid-bad", bad);
     li.setAttribute("data-my-empty", raw === "" ? "1" : "0");
@@ -292,10 +297,12 @@
       setText(e, t);
     };
     set("marked", marked + " / " + rows.length);
-    set("avg", avg === null ? "-" : Math.round(avg * 10) / 10 + (max ? " (" + Math.round((avg / max) * 100) + "%)" : ""));
-    set("range", vals.length ? Math.min(...vals) + " – " + Math.max(...vals) : "-");
+    const isPct = nums.some((x) => x.pct);
+    const r1 = (x) => Math.round(x * 10) / 10;
+    set("avg", avg === null ? "-" : isPct ? r1(avg) + "%" : r1(avg) + (max ? " (" + Math.round((avg / max) * 100) + "%)" : ""));
+    set("range", vals.length ? r1(Math.min(...vals)) + " – " + r1(Math.max(...vals)) + (isPct ? "%" : "") : "-");
     set("unmarked", String(rows.length - marked));
-    document.querySelectorAll(".my-grid-head [data-k=max]").forEach((h) => setText(h, max ? "Mark /" + max : "Mark"));
+    document.querySelectorAll(".my-grid-head [data-k=max]").forEach((h) => setText(h, isPct ? "Mark %" : max ? "Mark /" + max : "Mark"));
   }
 
   // ---- filter chips / sort ----
@@ -399,7 +406,7 @@
         markInput.setAttribute("autocomplete", "off");
         form.setAttribute("autocomplete", "off");
         const lim = markInput.getAttribute("data-validation-limit");
-        if (lim) markInput.setAttribute("placeholder", "/" + lim);
+        markInput.setAttribute("placeholder", isPctInput(markInput) ? "%" : lim ? "/" + lim : "");
       }
       if (markInput && lab) {
         const dd = el("button", "my-grid-dd", "\u25BE");
@@ -503,6 +510,8 @@
   document.addEventListener("change", (e) => {
     const m = e.target;
     if (m.matches && m.matches('input[name="mark"]')) {
+      // percentage tasks keep marks as "65 %": add the suffix to a bare number
+      if (isPctInput(m) && /^\s*\d+(\.\d+)?\s*$/.test(m.value)) m.value = parseFloat(m.value) + " %";
       const li = m.closest(ROW);
       if (li) {
         refreshRow(li);
