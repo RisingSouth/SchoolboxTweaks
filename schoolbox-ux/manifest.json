@@ -78,6 +78,15 @@
     },
     {
       "matches": [
+        "https://my.careywa.au/learning/markbook/class/*"
+      ],
+      "js": [
+        "markbook-period.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
         "https://my.edval.education/timetable*"
       ],
       "js": [

@@ -70,6 +70,11 @@ const TWEAK_GROUPS = [
         description: "Hides the 6 filter dropdowns behind a toggle",
       },
       {
+        id: "markbookPeriodMemory",
+        label: "Remember academic period filter",
+        description: "\"Remember periods\" button: re-applies your Due in Academic Period choice on each visit (current / current + previous / fixed), and drops it when a newer period appears",
+      },
+      {
         id: "markbookHeading",
         label: "Hide redundant heading",
         description: "Removes the heading that repeats the breadcrumb",
