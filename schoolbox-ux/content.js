@@ -1670,22 +1670,61 @@
       const classId = codeToId.get(normaliseClassCode(codeEl.textContent));
       if (!classId) return;
 
+      // Two small icon buttons in the box's top-right corner (see
+      // styles.css) - always visible, no extra height, label expands
+      // on hover. Same hrefs as before; title/aria-label carry the
+      // name for touch and screen readers.
       const wrapper = document.createElement("div");
       wrapper.className = "my-added-links";
 
-      const classListLink = document.createElement("a");
-      classListLink.href = `/learning/class/${classId}`;
-      classListLink.textContent = "Class List";
+      const makeIconLink = (href, label, pathData) => {
+        const a = document.createElement("a");
+        a.href = href;
+        a.className = "my-added-link";
+        a.title = label;
+        a.setAttribute("aria-label", label);
 
-      const separator = document.createTextNode(" | ");
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("width", "16");
+        svg.setAttribute("height", "16");
+        svg.setAttribute("fill", "none");
+        svg.setAttribute("stroke", "currentColor");
+        svg.setAttribute("stroke-width", "2");
+        svg.setAttribute("stroke-linecap", "round");
+        svg.setAttribute("stroke-linejoin", "round");
+        svg.setAttribute("aria-hidden", "true");
+        pathData.forEach((d) => {
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.setAttribute("d", d);
+          svg.appendChild(path);
+        });
 
-      const markbookLink = document.createElement("a");
-      markbookLink.href = `/learning/markbook/class/${classId}`;
-      markbookLink.textContent = "Markbook";
+        const text = document.createElement("span");
+        text.className = "my-added-link-label";
+        text.textContent = label;
 
-      wrapper.appendChild(classListLink);
-      wrapper.appendChild(separator);
-      wrapper.appendChild(markbookLink);
+        a.appendChild(svg);
+        a.appendChild(text);
+        return a;
+      };
+
+      // Users (Class List) and table (Markbook) glyphs.
+      wrapper.appendChild(
+        makeIconLink(`/learning/class/${classId}`, "Class List", [
+          "M9 7a4 4 0 1 0 8 0a4 4 0 1 0-8 0",
+          "M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2",
+          "M16 3.1a4 4 0 0 1 0 7.8",
+          "M21 21v-2a4 4 0 0 0-3-3.9",
+        ])
+      );
+      wrapper.appendChild(
+        makeIconLink(`/learning/markbook/class/${classId}`, "Markbook", [
+          "M4 4h16v16H4z",
+          "M4 10h16",
+          "M10 4v16",
+        ])
+      );
       box.appendChild(wrapper);
     });
   }

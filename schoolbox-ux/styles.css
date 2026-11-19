@@ -14,9 +14,61 @@
 }
 */
 
+/*
+  Class List / Markbook icon buttons in the timetable box's empty
+  top-right corner. Absolutely positioned, so the box's own height
+  and layout are untouched. The label expands on hover.
+*/
+.timetable-subject:has(> .my-added-links) {
+  position: relative;
+}
+
 .my-added-links {
-  margin-top: 4px;
-  font-size: 0.85em;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+}
+
+.my-added-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 26px;
+  min-width: 26px;
+  box-sizing: border-box;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.65);
+  color: rgb(30, 105, 128);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.my-added-link:hover {
+  background: #fff;
+}
+
+.my-added-link-label {
+  max-width: 0;
+  overflow: hidden;
+  transition: max-width 0.15s ease;
+}
+
+.my-added-link:hover .my-added-link-label,
+.my-added-link:focus-visible .my-added-link-label {
+  max-width: 70px;
+}
+
+/* Keep a long class name from running under the icons. */
+.timetable-subject:has(> .my-added-links) a[href^="/homepage/code/"] {
+  display: inline-block;
+  max-width: calc(100% - 64px);
+  vertical-align: top;
 }
 
 .my-quick-actions {
