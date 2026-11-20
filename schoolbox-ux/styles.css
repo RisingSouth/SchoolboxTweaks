@@ -1910,7 +1910,7 @@ body.my-status-grid .my-grid-row .ck-editor:focus-within { min-height: 30px; }
   -webkit-appearance: none !important; appearance: none !important;
   display: inline-flex !important; align-items: center !important; gap: 4px !important; box-sizing: border-box !important;
   height: 26px !important; min-height: 0 !important; min-width: 0 !important; width: auto !important; margin: 0 !important; padding: 0 12px !important; float: none !important;
-  font: 600 12px/1 inherit !important; font-family: inherit !important; letter-spacing: normal !important; text-transform: none !important; text-decoration: none !important; text-shadow: none !important;
+  font-family: inherit !important; font-size: 12px !important; font-weight: 600 !important; line-height: 1 !important; letter-spacing: normal !important; text-transform: none !important; text-decoration: none !important; text-shadow: none !important;
   border: 1px solid #1e6980 !important; border-radius: 6px !important; background: #1e6980 !important; color: #fff !important; box-shadow: none !important; cursor: pointer !important; white-space: nowrap !important;
 }
 .my-grid-status a.button[data-draft="publish"]:not([style*="none"])::before { content: "\2191"; font-weight: 700; }
@@ -1986,3 +1986,69 @@ body.my-status-grid .my-grid-row .ck-editor:focus-within { min-height: 30px; }
 .my-nav-whatsnew-more:hover {
   background: #f5f5f5;
 }
+
+/* ---- Marking grid: quieter inputs, aligned heights, compact row buttons ---- */
+
+/* Mark box and feedback box: same 30px height; mark box has a light
+   grey border at rest, teal on focus. The old heavy teal outline on every row
+   was the main source of visual noise. The .combobox wrapper is
+   flattened so only the input draws a border (one outline, not two). */
+body.my-status-grid .my-grid-row .combobox {
+  height: 30px !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
+  border: 0 !important; background: transparent !important; box-shadow: none !important;
+}
+body.my-status-grid .my-grid-row input[name="mark"] {
+  box-sizing: border-box !important; height: 30px !important; min-height: 0 !important;
+  border: 1px solid #d5dbdf !important; border-radius: 6px !important; background: #fff !important; box-shadow: none !important;
+}
+/* Feedback box: soft grey fill with no outline at rest, white with a
+   grey outline on hover, teal on focus. Keeps the field visible
+   without 17 rows of outlines. */
+body.my-status-grid .my-grid-row .ck.ck-editor__editable:not(.ck-focused) {
+  box-sizing: border-box !important;
+  border: 1px solid transparent !important; border-radius: 6px !important; background: #f3f5f6 !important; box-shadow: none !important;
+}
+body.my-status-grid .my-grid-row .ck.ck-editor__editable:not(.ck-focused):hover {
+  border-color: #9fb3bb !important; background: #fff !important;
+}
+body.my-status-grid .my-grid-row input[name="mark"]:hover {
+  border-color: #9fb3bb !important;
+}
+body.my-status-grid .my-grid-row input[name="mark"]:focus {
+  border-color: #1e6980 !important; box-shadow: 0 0 0 2px rgba(30, 105, 128, .18) !important; outline: none !important;
+}
+body.my-status-grid .my-grid-row .ck.ck-editor__editable.ck-focused {
+  border: 1px solid #1e6980 !important; border-radius: 6px !important;
+}
+/* Quieter placeholders ("/40", "Feedback for X") */
+body.my-status-grid .my-grid-row input[name="mark"]::placeholder { color: #a9b2b8 !important; opacity: 1; }
+body.my-status-grid .my-grid-row .ck-placeholder::before { color: #a9b2b8 !important; font-style: normal !important; }
+/* The not-submitted rows keep a validation outline */
+body.my-status-grid .my-grid-row input[name="mark"].my-grid-bad { border-color: #c0392b !important; }
+
+/* Dropdown caret: centred in the mark box, drawn in CSS (the old text
+   glyph sat high and read as a stray mark). */
+.my-grid-row button.my-grid-dd {
+  top: 1px !important; right: 1px !important; height: 28px !important; width: 24px !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  font-size: 0 !important; line-height: 0 !important; color: #8a99a1 !important;
+}
+.my-grid-row button.my-grid-dd:hover { color: #1e6980 !important; }
+.my-grid-dd::after {
+  content: ""; display: block; width: 5px; height: 5px; margin-top: -3px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg);
+}
+
+/* "Mark as Submitted": Schoolbox's big uppercase button, made a compact
+   outline button in the same family as Publish. Never wraps. */
+.my-grid-status button.button[data-sobo] {
+  -webkit-appearance: none !important; appearance: none !important;
+  display: inline-flex !important; align-items: center !important; box-sizing: border-box !important;
+  height: 26px !important; min-height: 0 !important; min-width: 0 !important; width: auto !important; margin: 0 !important; padding: 0 10px !important; float: none !important;
+  font-family: inherit !important; font-size: 12px !important; font-weight: 500 !important; line-height: 1 !important; letter-spacing: normal !important; text-transform: none !important; text-shadow: none !important;
+  border: 1px solid #c9d0d4 !important; border-radius: 6px !important; background: #fff !important; color: #1e6980 !important; box-shadow: none !important;
+  cursor: pointer !important; white-space: nowrap !important;
+}
+.my-grid-status button.button[data-sobo]:hover { background: #f4f8fa !important; border-color: #1e6980 !important; }
+.my-grid-status button.button[data-sobo]:focus-visible { outline: 2px solid #8fc1d4 !important; outline-offset: 2px !important; }
+.my-grid-status { flex-wrap: nowrap; justify-content: flex-start; }

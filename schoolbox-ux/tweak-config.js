@@ -71,7 +71,7 @@ const TWEAK_GROUPS = [
       },
       {
         id: "markbookPeriodMemory",
-        since: "1.2.9",
+        since: "1.2.10",
         label: "Remember academic period filter",
         description: "Remembers the Due in Academic Period you last applied and re-applies it on each visit (this year / current / current + previous / fixed); a fixed choice drops back to the default when a newer period appears",
       },
@@ -207,13 +207,13 @@ const TWEAK_GROUPS = [
     tweaks: [
       {
         id: "assessmentStatusGrid",
-        since: "1.2.9",
+        since: "1.2.10",
         label: "Marking grid",
         description: "Spreadsheet-style marking page: one row per student, type marks and feedback with Enter/arrow keys, A/N/S or the ▾ menu for Absent/Not Assessed/Not Submitted, stats, Unmarked/Drafts filters, per-row Publish, hover portraits. Staff can switch back to Classic on the page",
       },
       {
         id: "assessmentStatusLimit",
-        since: "1.2.9",
+        since: "1.2.10",
         label: "Show up to 50 students per page",
         description: "Raises Schoolbox's 25-per-page cap on the assessment status page (takes effect on next page load)",
       },
@@ -231,7 +231,7 @@ const TWEAK_GROUPS = [
 // ---------------------------------------------------------------
 const CHANGELOG = [
   {
-    version: "1.2.9",
+    version: "1.2.10",
     items: [
       {
         title: "Marking grid",

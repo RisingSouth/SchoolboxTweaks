@@ -356,7 +356,7 @@
     S(b, Object.assign({}, BTN, { height: "24px", border: "0", "border-left": b.getAttribute("data-mode") === "classic" ? "1px solid #c9d0d4" : "0", "border-radius": "0", background: active ? "#1e6980" : "transparent", color: active ? "#fff" : "#556", cursor: active ? "default" : "pointer" }));
   }
 
-  const COLS = "28px 190px 96px 48px minmax(0, 1fr) 200px";
+  const COLS = "28px 190px 96px 48px minmax(0, 1fr) 280px";
 
   // Per-row publish state, read from Schoolbox's own action bar:
   //   published - bar carries data-published (bar and Publish link are hidden)
