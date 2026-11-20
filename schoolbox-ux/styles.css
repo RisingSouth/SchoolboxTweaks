@@ -1881,7 +1881,10 @@ body.my-status-grid .my-grid-row .ck-editor:focus-within { min-height: 30px; }
    display:none on the bar. */
 .my-grid-status { display: flex !important; align-items: center; gap: 8px; }
 .my-grid-status .component-action:not([data-published]) { margin: 0 !important; padding: 0 !important; height: auto !important; }
-.my-grid-status .component-action:not([data-published]) section { display: flex !important; margin: 0 !important; padding: 0 !important; height: auto !important; }
+/* Schoolbox's own section rule gives the action bar min-height:40px and an
+   off-white background (confirmed from computed styles): that held the
+   26px button at the top of a 40px box and drew a grey strip under it. */
+.my-grid-status .component-action:not([data-published]) section { display: flex !important; align-items: center !important; gap: 8px !important; margin: 0 !important; padding: 0 !important; height: auto !important; min-height: 0 !important; background: transparent !important; box-shadow: none !important; border: 0 !important; }
 .my-grid-status .component-action-info, .my-grid-status [data-draft="drafted"] { display: none !important; }
 .my-grid-pill--draft { background: #fdecd5; color: #8a4b00; }
 .my-grid-pill--published { background: #e0f2e4; color: #1f6b34; }
