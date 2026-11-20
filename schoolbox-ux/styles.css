@@ -1909,17 +1909,17 @@ body.my-status-grid .my-grid-row .ck-editor:focus-within { min-height: 30px; }
 .my-grid-classic-bar { display: flex !important; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 0 8px !important; }
 
 /* Per-row Publish: a compact solid button after the Draft pill */
-.my-grid-status a.button[data-draft="publish"]:not([style*="none"]) {
+.my-grid-status .component-action:not([data-published]) a.button[data-draft="publish"]:not([style*="none"]) {
   -webkit-appearance: none !important; appearance: none !important;
   display: inline-flex !important; align-items: center !important; gap: 4px !important; box-sizing: border-box !important;
   height: 26px !important; min-height: 0 !important; min-width: 0 !important; width: auto !important; margin: 0 !important; padding: 0 12px !important; float: none !important;
   font-family: inherit !important; font-size: 12px !important; font-weight: 600 !important; line-height: 1 !important; letter-spacing: normal !important; text-transform: none !important; text-decoration: none !important; text-shadow: none !important;
   border: 1px solid #1e6980 !important; border-radius: 6px !important; background: #1e6980 !important; color: #fff !important; box-shadow: none !important; cursor: pointer !important; white-space: nowrap !important;
 }
-.my-grid-status a.button[data-draft="publish"]:not([style*="none"])::before { content: "\2191"; font-weight: 700; }
-.my-grid-status a.button[data-draft="publish"]:not([style*="none"]):hover { background: #14566b !important; border-color: #14566b !important; }
-.my-grid-status a.button[data-draft="publish"]:not([style*="none"]):active { transform: translateY(1px); }
-.my-grid-status a.button[data-draft="publish"]:not([style*="none"]):focus-visible { outline: 2px solid #8fc1d4 !important; outline-offset: 2px !important; }
+.my-grid-status .component-action:not([data-published]) a.button[data-draft="publish"]:not([style*="none"])::before { content: "\2191"; font-weight: 700; }
+.my-grid-status .component-action:not([data-published]) a.button[data-draft="publish"]:not([style*="none"]):hover { background: #14566b !important; border-color: #14566b !important; }
+.my-grid-status .component-action:not([data-published]) a.button[data-draft="publish"]:not([style*="none"]):active { transform: translateY(1px); }
+.my-grid-status .component-action:not([data-published]) a.button[data-draft="publish"]:not([style*="none"]):focus-visible { outline: 2px solid #8fc1d4 !important; outline-offset: 2px !important; }
 
 /* ▾ status button in each mark box and its menu: same hardening */
 .my-grid-row button.my-grid-dd { -webkit-appearance: none !important; appearance: none !important; box-sizing: border-box !important; position: absolute !important; right: 2px !important; top: 3px !important; display: block !important; width: 22px !important; height: 24px !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; font: 12px/24px inherit !important; text-align: center !important; text-transform: none !important; letter-spacing: normal !important; border: 0 !important; border-radius: 4px !important; background: transparent !important; color: #667 !important; box-shadow: none !important; cursor: pointer !important; }
@@ -2055,3 +2055,7 @@ body.my-status-grid .my-grid-row input[name="mark"].my-grid-bad { border-color: 
 .my-grid-status button.button[data-sobo]:hover { background: #f4f8fa !important; border-color: #1e6980 !important; }
 .my-grid-status button.button[data-sobo]:focus-visible { outline: 2px solid #8fc1d4 !important; outline-offset: 2px !important; }
 .my-grid-status { flex-wrap: nowrap; justify-content: flex-start; }
+
+/* Once Schoolbox marks a row published it hides Publish through its own
+   stylesheet; the button style above forced it back on with !important. */
+.my-grid-status .component-action[data-published] a.button[data-draft="publish"] { display: none !important; }
