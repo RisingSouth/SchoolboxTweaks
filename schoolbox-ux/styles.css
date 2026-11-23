@@ -2059,3 +2059,134 @@ body.my-status-grid .my-grid-row input[name="mark"].my-grid-bad { border-color: 
 /* Once Schoolbox marks a row published it hides Publish through its own
    stylesheet; the button style above forced it back on with !important. */
 .my-grid-status .component-action[data-published] a.button[data-draft="publish"] { display: none !important; }
+
+/* ---------------------------------------------------------------
+   Dashboard "Today" panel (see addTodayPanelToDashboard)
+   --------------------------------------------------------------- */
+.my-tweak-today [data-timetable-container] > section,
+.my-tweak-today [data-timetable-container] .timetable-small {
+  display: none !important;
+}
+
+.my-tweak-today-hide .Component_Dashboard_GreetingController,
+.my-tweak-today-hide .Schoolbox_Calendar_Component_Dashboard_Controller,
+.my-tweak-today-hide .Component_Dashboard_RecentSubmissionsController,
+.my-tweak-today-hide .Schoolbox_Learning_Component_Dashboard_CurrentLessonPlanController {
+  display: none !important;
+}
+
+.my-today {
+  margin: 0 0 1rem;
+}
+
+.my-today__strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 700px) {
+  .my-today__strip { grid-template-columns: 1fr; }
+}
+
+.my-today__box {
+  padding: 0.75rem 1rem;
+  background: #fff;
+}
+
+.my-today__box + .my-today__box {
+  border-left: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.my-today__eyebrow {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.my-today__title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.my-today__title--muted {
+  color: #777;
+  font-weight: 500;
+}
+
+.my-today__room {
+  font-weight: 400;
+  color: #666;
+}
+
+.my-today__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.my-today__badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #eee;
+  color: #555;
+}
+
+.my-today__badge--covering {
+  background: #fff6e5;
+  color: #8a5300;
+}
+
+.my-today__badge--next {
+  background: rgb(212, 229, 232);
+  color: rgb(30, 105, 128);
+}
+
+.my-today__agenda {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.my-today__agenda-head {
+  padding: 0.6rem 1rem;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.my-today__row {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 5.5rem 1fr auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 0.9rem;
+  color: inherit;
+}
+
+.my-today__row--toggle { cursor: pointer; }
+.my-today__row--toggle:hover { background: #f6f6f6; }
+.my-today__row--past { color: #777; }
+.my-today__row--now { background: #f3f3f3; }
+.my-today__row--next { box-shadow: inset 3px 0 0 rgb(30, 105, 128); }
+.my-today__time { font-size: 0.8rem; color: #666; }
+.my-today__chevron { color: #777; }
+.my-today__past[hidden] { display: none; }
+
+/* The Today panel shows relief inline, so the separate item list is redundant. */
+.my-tweak-today .my-relief__item { display: none; }

@@ -51,6 +51,7 @@
     if (tweakToggles.classListGmailCompose) addGmailComposeToClassListModal();
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
     if (tweakToggles.dashboardRelief) addReliefCheckToDashboard();
+    if (tweakToggles.dashboardToday) addTodayPanelToDashboard();
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
     if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
     if (tweakToggles.pastoralRecordHistoryPanel) addPastoralRecordHistoryPanel();
@@ -63,6 +64,11 @@
 
     // Pure-CSS tweak (see styles.css) - toggled via a body class
     // rather than a call to skip, since there's no DOM to build.
+    document.body.classList.toggle("my-tweak-today", !!tweakToggles.dashboardToday);
+    document.body.classList.toggle(
+      "my-tweak-today-hide",
+      !!tweakToggles.dashboardToday && !!tweakToggles.dashboardTodayHide
+    );
     document.body.classList.toggle(
       "my-tweak-full-height-table",
       !!tweakToggles.markbookFullHeight
@@ -3153,6 +3159,413 @@
         }
       });
     });
+  }
+
+  // ---------------------------------------------------------------
+  // Dashboard: "Today" panel (Now / Next strip + one agenda)
+  //
+  // Reads everything from what's already on the page - the desktop
+  // timetable table (periods, codes, rooms, existing Class List /
+  // Markbook / attendance links), the calendar widget's all-day rows,
+  // and the saved relief-check result in chrome.storage.local - so it
+  // makes no network request. The native timetable is hidden by CSS
+  // (body.my-tweak-today) but stays in the DOM, so the other
+  // dashboard tweaks keep working against it.
+  //
+  // Built once. Re-rendered on a timer (so "now" moves on) and when
+  // the saved relief result changes - never from the mutation
+  // observer, so it can't feed back into itself.
+  // ---------------------------------------------------------------
+
+  function parseClockMinutes(text) {
+    const m = (text || "").trim().toLowerCase().match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/);
+    if (!m) return null;
+    let h = Number(m[1]) % 12;
+    if (m[3] === "pm") h += 12;
+    return h * 60 + Number(m[2]);
+  }
+
+  function formatClockMinutes(mins) {
+    const h24 = Math.floor(mins / 60);
+    const m = mins % 60;
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    return `${h12}:${String(m).padStart(2, "0")}${h24 >= 12 ? "pm" : "am"}`;
+  }
+
+  // Periods as {start, end (minutes), code, name, room, href, links[],
+  // covered, duty}. Combined periods (two classes at the same time)
+  // stay as separate entries here and are merged at render time.
+  function readTimetablePeriods() {
+    const table = getDesktopTimetableTable();
+    if (!table) return null;
+    const headers = Array.from(table.querySelectorAll("thead th"));
+    const cells = Array.from(table.querySelectorAll("tbody tr td"));
+    if (!headers.length || headers.length !== cells.length) return null;
+
+    const periods = [];
+    headers.forEach((th, i) => {
+      const td = cells[i];
+      const timeEl = th.querySelector("time.meta");
+      if (!timeEl) return;
+      const [startText, endText] = timeEl.textContent.split("–");
+      const start = parseClockMinutes(startText);
+      const end = parseClockMinutes(endText);
+      if (start === null || end === null) return;
+
+      const label = th.childNodes[0] ? th.childNodes[0].textContent.trim() : "";
+      const subject = td.querySelector(".timetable-subject");
+      if (!subject) return;
+
+      const plainDivs = Array.from(subject.children).filter(
+        (el) => el.tagName === "DIV" && !el.className
+      );
+      const nameLink = subject.querySelector('a[href*="/homepage/code/"]');
+      const attendance = subject.querySelector(".icon-class-list a");
+      const links = {};
+      subject.querySelectorAll(".my-added-links a").forEach((a) => {
+        links[a.title] = a.getAttribute("href");
+      });
+
+      periods.push({
+        start,
+        end,
+        label,
+        name: nameLink ? nameLink.textContent.trim() : "",
+        code: plainDivs[0] ? plainDivs[0].textContent.trim() : "",
+        room: plainDivs[1] ? plainDivs[1].textContent.trim() : "",
+        pageHref: nameLink ? nameLink.getAttribute("href") : "",
+        attendanceHref: attendance ? attendance.href : "",
+        links,
+      });
+    });
+    return periods;
+  }
+
+  function readTodayAllDayEvents() {
+    const table = document.querySelector(".fc-list-table");
+    if (!table) return [];
+    const rows = Array.from(table.querySelectorAll("tbody > tr"));
+    const todayIndex = rows.findIndex((r) => r.classList.contains("fc-day-today"));
+    if (todayIndex === -1) return [];
+    const out = [];
+    for (let i = todayIndex + 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.classList.contains("fc-list-day")) break;
+      const time = row.querySelector(".fc-list-event-time");
+      if (!time || time.textContent.trim().toLowerCase() !== "all-day") continue;
+      const title = row.querySelector(".fc-event-title");
+      if (title) out.push(title.textContent.trim().replace(/\s+/g, " "));
+    }
+    return out;
+  }
+
+  function msToMinutesOfDay(ms) {
+    const d = new Date(ms);
+    return d.getHours() * 60 + d.getMinutes();
+  }
+
+  // Groups periods that share a start time into one agenda row, and
+  // layers the saved relief result on top: "covered" marks your own
+  // class as covered; "covering" adds a row for a class you're
+  // covering (which isn't on your own timetable).
+  function buildTodayRows(periods, relief) {
+    const rows = [];
+    periods.forEach((p) => {
+      let row = rows.find((r) => r.start === p.start && r.end === p.end);
+      if (!row) {
+        row = { start: p.start, end: p.end, label: p.label, classes: [] };
+        rows.push(row);
+      }
+      row.classes.push(p);
+    });
+
+    const todayIso = localIsoDate(new Date());
+    const items =
+      relief && relief.forDate === todayIso
+        ? (relief.items || []).filter((i) => i.date === todayIso)
+        : [];
+
+    items.forEach((item) => {
+      const start = msToMinutesOfDay(item.from);
+      const end = msToMinutesOfDay(item.to);
+      if (item.kind === "covered") {
+        const code = normaliseClassCode(item.classCode || "");
+        rows.forEach((row) => {
+          row.classes.forEach((c) => {
+            if (normaliseClassCode(c.code) === code) {
+              c.coveredBy = item.otherName || item.otherCode || "someone else";
+            }
+          });
+        });
+      } else if (item.kind === "covering") {
+        rows.push({
+          start,
+          end,
+          label: "Relief",
+          classes: [
+            {
+              start,
+              end,
+              name: item.subject || "Relief",
+              code: item.classCode || "",
+              room: item.room || "",
+              covering: item.otherName || item.otherCode || "",
+              links: {},
+              attendanceHref: "https://portals.veracross.au/carey/faculty",
+            },
+          ],
+        });
+      }
+    });
+
+    rows.sort((a, b) => a.start - b.start);
+    return rows;
+  }
+
+  function todayEl(tag, className, text) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text !== undefined) el.textContent = text;
+    return el;
+  }
+
+  function todayRowTitle(row) {
+    if (row.classes.length > 1) {
+      return row.classes.map((c) => c.code || c.name).join(" + ");
+    }
+    const c = row.classes[0];
+    return `${c.name || c.code}${c.name && c.code ? " " + c.code : ""}`;
+  }
+
+  function todayRowRoom(row) {
+    const rooms = Array.from(new Set(row.classes.map((c) => c.room).filter(Boolean)));
+    return rooms.join(", ");
+  }
+
+  function todayRowStatus(row) {
+    const covered = row.classes.filter((c) => c.coveredBy);
+    if (covered.length && covered.length === row.classes.length) {
+      return { kind: "covered", text: `Covered by ${covered[0].coveredBy}` };
+    }
+    const covering = row.classes.find((c) => c.covering);
+    if (covering) return { kind: "covering", text: `You're covering for ${covering.covering}` };
+    return null;
+  }
+
+  function todayActionButtons(row) {
+    const wrap = todayEl("div", "my-today__actions");
+    const c = row.classes[0];
+    const add = (label, href, newTab) => {
+      if (!href) return;
+      const a = todayEl("a", "my-quick-action-button my-quick-action-button--small", label);
+      a.href = href;
+      if (newTab) {
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+      }
+      wrap.appendChild(a);
+    };
+    add("Attendance", c.attendanceHref, true);
+    add("Class list", c.links["Class List"], false);
+    add("Markbook", c.links["Markbook"], false);
+    add("Class page", c.pageHref, false);
+    return wrap;
+  }
+
+  function renderTodayPanel(panel, relief) {
+    const periods = readTimetablePeriods();
+    if (!periods) return;
+    const rows = buildTodayRows(periods, relief);
+    const allDay = readTodayAllDayEvents();
+
+    const nowDate = new Date();
+    const now = nowDate.getHours() * 60 + nowDate.getMinutes();
+    const current = rows.find((r) => r.start <= now && now < r.end);
+    const upcoming = rows.filter((r) => r.start > now);
+    const next = upcoming[0];
+
+    panel.textContent = "";
+
+    // --- Now / Next strip ---
+    const strip = todayEl("div", "my-today__strip");
+
+    const nowBox = todayEl("div", "my-today__box");
+    if (current) {
+      const status = todayRowStatus(current);
+      nowBox.appendChild(
+        todayEl(
+          "div",
+          "my-today__eyebrow",
+          `Now · ${current.label} · ${formatClockMinutes(current.start)}–${formatClockMinutes(current.end)} · ${current.end - now} min left`
+        )
+      );
+      const title = todayEl("div", "my-today__title", todayRowTitle(current));
+      const room = todayRowRoom(current);
+      if (room) title.appendChild(todayEl("span", "my-today__room", ` · ${room}`));
+      if (status) title.classList.add("my-today__title--muted");
+      nowBox.appendChild(title);
+      if (status) {
+        nowBox.appendChild(todayEl("span", `my-today__badge my-today__badge--${status.kind}`, status.text));
+      } else {
+        nowBox.appendChild(todayActionButtons(current));
+      }
+    } else {
+      nowBox.appendChild(todayEl("div", "my-today__eyebrow", "Now"));
+      nowBox.appendChild(
+        todayEl(
+          "div",
+          "my-today__title my-today__title--muted",
+          next ? "Between periods" : rows.length && now >= rows[rows.length - 1].end ? "Done for the day" : "Before school"
+        )
+      );
+    }
+    strip.appendChild(nowBox);
+
+    const nextBox = todayEl("div", "my-today__box");
+    if (next) {
+      const status = todayRowStatus(next);
+      nextBox.appendChild(
+        todayEl(
+          "div",
+          "my-today__eyebrow",
+          `Next · ${next.label} · ${formatClockMinutes(next.start)} · in ${next.start - now} min`
+        )
+      );
+      const title = todayEl("div", "my-today__title", todayRowTitle(next));
+      const room = todayRowRoom(next);
+      if (room) title.appendChild(todayEl("span", "my-today__room", ` · ${room}`));
+      if (status) title.classList.add("my-today__title--muted");
+      nextBox.appendChild(title);
+      if (status) {
+        nextBox.appendChild(todayEl("span", `my-today__badge my-today__badge--${status.kind}`, status.text));
+      } else {
+        nextBox.appendChild(todayActionButtons(next));
+      }
+    } else {
+      nextBox.appendChild(todayEl("div", "my-today__eyebrow", "Next"));
+      nextBox.appendChild(todayEl("div", "my-today__title my-today__title--muted", "Nothing else today"));
+    }
+    strip.appendChild(nextBox);
+    panel.appendChild(strip);
+
+    // --- Agenda ---
+    const agenda = todayEl("div", "my-today__agenda");
+    agenda.appendChild(
+      todayEl(
+        "div",
+        "my-today__agenda-head",
+        `Today · ${nowDate.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })}`
+      )
+    );
+
+    const past = rows.filter((r) => r.end <= now);
+    const rest = rows.filter((r) => r.end > now);
+
+    const makeRow = (row, extraClass) => {
+      const status = todayRowStatus(row);
+      const el = todayEl("div", `my-today__row ${extraClass || ""}`);
+      el.appendChild(todayEl("span", "my-today__time", formatClockMinutes(row.start)));
+      const title = todayEl("span", "my-today__row-title", todayRowTitle(row));
+      const room = todayRowRoom(row);
+      if (room) title.appendChild(todayEl("span", "my-today__room", ` · ${room}`));
+      el.appendChild(title);
+      if (status) {
+        el.appendChild(todayEl("span", `my-today__badge my-today__badge--${status.kind}`, status.text));
+      } else if (row === next) {
+        el.appendChild(todayEl("span", "my-today__badge my-today__badge--next", "Next"));
+      }
+      return el;
+    };
+
+    if (past.length) {
+      const coveredCount = past.filter((r) => todayRowStatus(r) && todayRowStatus(r).kind === "covered").length;
+      const toggle = todayEl("button", "my-today__row my-today__row--toggle");
+      toggle.type = "button";
+      toggle.appendChild(todayEl("span", "my-today__time", "Earlier"));
+      toggle.appendChild(
+        todayEl(
+          "span",
+          "my-today__row-title",
+          `${past.length} period${past.length === 1 ? "" : "s"}${coveredCount ? ` · ${coveredCount} covered` : ""}`
+        )
+      );
+      toggle.appendChild(todayEl("span", "my-today__chevron", "▾"));
+      const pastBody = todayEl("div", "my-today__past");
+      pastBody.hidden = true;
+      past.forEach((r) => pastBody.appendChild(makeRow(r, "my-today__row--past")));
+      toggle.addEventListener("click", () => {
+        pastBody.hidden = !pastBody.hidden;
+        panel.dataset.pastOpen = pastBody.hidden ? "" : "1";
+      });
+      if (panel.dataset.pastOpen === "1") pastBody.hidden = false;
+      agenda.append(toggle, pastBody);
+    }
+
+    rest.forEach((r) => {
+      const isNow = r === current;
+      agenda.appendChild(makeRow(r, isNow ? "my-today__row--now" : r === next ? "my-today__row--next" : ""));
+    });
+
+    if (allDay.length) {
+      const toggle = todayEl("button", "my-today__row my-today__row--toggle");
+      toggle.type = "button";
+      toggle.appendChild(todayEl("span", "my-today__time", "All day"));
+      toggle.appendChild(
+        todayEl("span", "my-today__row-title", `${allDay.length} event${allDay.length === 1 ? "" : "s"}`)
+      );
+      toggle.appendChild(todayEl("span", "my-today__chevron", "▾"));
+      const body = todayEl("div", "my-today__past");
+      body.hidden = panel.dataset.allDayOpen !== "1";
+      allDay.forEach((title) => {
+        const row = todayEl("div", "my-today__row my-today__row--past");
+        row.appendChild(todayEl("span", "my-today__time", ""));
+        row.appendChild(todayEl("span", "my-today__row-title", title));
+        body.appendChild(row);
+      });
+      toggle.addEventListener("click", () => {
+        body.hidden = !body.hidden;
+        panel.dataset.allDayOpen = body.hidden ? "" : "1";
+      });
+      agenda.append(toggle, body);
+    }
+
+    panel.appendChild(agenda);
+  }
+
+  function addTodayPanelToDashboard() {
+    if (!isDashboardPage()) return;
+    if (document.getElementById("my-today")) return;
+
+    const table = getDesktopTimetableTable();
+    const header = document.querySelector("[data-timetable-header]");
+    if (!table || !header) return;
+    // Wait until the timetable has real cells to read.
+    if (!table.querySelector("tbody tr td .timetable-subject")) return;
+
+    const container = header.parentElement;
+    const anchor = container.querySelector(".my-relief") || header;
+
+    const panel = document.createElement("div");
+    panel.id = "my-today";
+    panel.className = "my-today";
+    anchor.after(panel);
+
+    let latestRelief = null;
+    const redraw = () => renderTodayPanel(panel, latestRelief);
+
+    chrome.storage.local.get({ reliefResult: null }, (stored) => {
+      latestRelief = stored.reliefResult;
+      redraw();
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local" && changes.reliefResult) {
+        latestRelief = changes.reliefResult.newValue || null;
+        redraw();
+      }
+    });
+    // Keep "now" honest. The calendar widget's all-day rows can also
+    // arrive after this first draw, so the timer picks them up too.
+    setInterval(redraw, 30000);
   }
 
   // Builds the "My duties" collapsible section of the nav dropdown

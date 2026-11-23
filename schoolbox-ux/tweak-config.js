@@ -24,6 +24,16 @@ const TWEAK_GROUPS = [
         label: "Relief check",
         description: "\"Check relief\" button on the dashboard timetable: opens Edval in a background tab on click, reads this week's relief, then closes it",
       },
+      {
+        id: "dashboardToday",
+        label: "Today panel",
+        description: "Now / Next strip and one agenda for today, replacing the wide timetable table. Relief shows inline",
+      },
+      {
+        id: "dashboardTodayHide",
+        label: "Hide redundant dashboard widgets",
+        description: "With the Today panel on: hides the greeting, calendar, recent submissions and lesson plans widgets",
+      },
     ],
   },
   {
