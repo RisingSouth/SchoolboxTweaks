@@ -30,3 +30,12 @@ Zip this folder and send it — they follow step 2 themselves. No store account 
 
 ## 7. When ready to publish
 Register as a Chrome Web Store developer ($5 one-off), then upload a zip of this folder from the [developer dashboard](https://chrome.google.com/webstore/devconsole).
+
+## Pastoral note templates
+On the new pastoral record page, **Templates** saves and re-applies your own notes.
+
+- **Save:** after you save a record, a banner on the student's profile page offers "Save as template". The student's name in the note becomes a token (`[firstname]`, `[surname]`, `[fullname]`) so it fills in for the next student. You can also use **Templates → Save current note as template…** on the form.
+- **Apply:** **Templates →** pick one. It sets Type, Sub-type, Title, points, tags and the General note. **Undo** restores what was there. You still press Save yourself.
+- **Manage:** **Templates → Manage templates** to rename, delete, or export/import as text to share with a colleague.
+- **Never saved:** the Confidential note, the date, and the student.
+- **Where they live:** your Chrome profile (`chrome.storage.sync`), one item per template, up to 50, about 7KB each. Turn the feature off under *Pastoral records* in Settings. Terms are defined in `../GLOSSARY.md`.

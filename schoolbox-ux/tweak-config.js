@@ -26,6 +26,7 @@ const TWEAK_GROUPS = [
       },
       {
         id: "dashboardTimetableChanges",
+        since: "1.2.11",
         label: "Cancelled lessons and room changes",
         description: "Marks cancelled lessons and room swaps on the dashboard timetable, from the last \"Check relief\" result",
       },
@@ -207,6 +208,7 @@ const TWEAK_GROUPS = [
       },
       {
         id: "pastoralTemplates",
+        since: "1.2.11",
         label: "Templates for pastoral notes",
         description: "Templates button on the new-record form: apply your own saved notes (Type, Sub-type, Title, points, tags and the General note) - you still press Save",
       },
@@ -240,6 +242,19 @@ const TWEAK_GROUPS = [
 // Entries are highlights grouped by feature, not one per commit.
 // ---------------------------------------------------------------
 const CHANGELOG = [
+  {
+    version: "1.2.11",
+    items: [
+      {
+        title: "Templates for pastoral notes",
+        text: "New Templates button on the new-record form. After you save a record you can keep the note as a template (student names become tokens), then apply, rename, delete, export or import templates later. Your own list; the Confidential note is never saved. Turn it off in the Pastoral records group.",
+      },
+      {
+        title: "Cancelled lessons and room changes",
+        text: "After \"Check relief\", cancelled lessons and room swaps are marked on the dashboard timetable. Edval events now also appear in the relief list.",
+      },
+    ],
+  },
   {
     version: "1.2.10",
     items: [
