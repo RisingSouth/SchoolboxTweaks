@@ -297,6 +297,10 @@ const CHANGELOG = [
         text: "Hover (or Tab to) a lesson on the Timetable page for Class List, Markbook and Go to class. Clicking a lesson also adds a Course page button to its pop-up. Turn it off in the Timetable page group.",
       },
       {
+        title: "Course page on My Classes",
+        text: "Each class card on My Classes now has a Course page button (not shown for Homerooms). Turn it off with the quick links setting for the classes grid.",
+      },
+      {
         title: "Sent mail record",
         text: "A private list of who each Schoolbox email was sent to, so you can check later who was contacted. Kept only in your browser for 100 days (never the message itself); search, export or delete it at the bottom of this page. Turn it off in the Webmail group.",
       },
