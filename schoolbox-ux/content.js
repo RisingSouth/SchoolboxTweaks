@@ -2781,7 +2781,7 @@
   // addressed to in sessionStorage; on the next page load, if we're no
   // longer on the compose form, the send went through and the note is
   // saved to the browser-only log (chrome.storage.local, pruned to 100
-  // days; see tweak-config.js). The message text is never read.
+  // days; see tweak-config.js). Only the first 10 words of the message are kept.
   const SENT_MAIL_PENDING_KEY = "mySentMailPending";
   const SENT_MAIL_PENDING_MAX_AGE_MS = 3 * 60 * 1000;
   let sentMailPendingChecked = false;
@@ -2800,6 +2800,23 @@
     return out;
   }
 
+  // First 10 words of the message, as plain text. Prefers the live editor
+  // (CKEditor) and falls back to the hidden #body field's HTML.
+  function mailPreview(form) {
+    let text = "";
+    const editable = document.querySelector(".ck-editor__editable");
+    if (editable) text = editable.innerText || editable.textContent || "";
+    if (!text.trim()) {
+      const body = form.querySelector("#body");
+      if (body && body.value) {
+        text = new DOMParser().parseFromString(body.value, "text/html").body.textContent || "";
+      }
+    }
+    const words = text.replace(/\u00a0/g, " ").trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return "";
+    return words.slice(0, 10).join(" ") + (words.length > 10 ? "…" : "");
+  }
+
   function snapshotSentMail(form) {
     const val = (id) => {
       const el = form.querySelector("#" + id);
@@ -2813,6 +2830,7 @@
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       ts: Date.now(),
       subject: val("subject").trim() || "(no subject)",
+      preview: mailPreview(form),
       to,
       cc,
       bcc,

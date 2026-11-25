@@ -303,7 +303,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function entryMatches(entry, q) {
     if (!q) return true;
-    const hay = [entry.subject]
+    const hay = [entry.subject, entry.preview || ""]
       .concat(["to", "cc", "bcc"].flatMap((f) => (entry[f] || []).map((r) => r.name + " " + r.email)))
       .join(" ")
       .toLowerCase();
@@ -315,11 +315,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function exportSentMailCsv() {
-    const rows = [["Sent", "Subject", "Field", "Name", "Email"]];
+    const rows = [["Sent", "Subject", "Message start", "Field", "Name", "Email"]];
     sentLog.forEach((e) => {
       ["to", "cc", "bcc"].forEach((f) => {
         (e[f] || []).forEach((r) => {
-          rows.push([new Date(e.ts).toISOString(), e.subject, f.toUpperCase(), r.name, r.email]);
+          rows.push([new Date(e.ts).toISOString(), e.subject, e.preview || "", f.toUpperCase(), r.name, r.email]);
         });
       });
     });
@@ -345,7 +345,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const desc = document.createElement("p");
     desc.className = "tweak-desc";
     desc.textContent =
-      "Who each email you sent from Schoolbox was addressed to. Kept only in this browser (not synced), never the message itself, and deleted automatically after " +
+      "Who each email you sent from Schoolbox was addressed to, with its subject and the first 10 words of the message. Kept only in this browser (not synced) and deleted automatically after " +
       SENT_MAIL_RETENTION_DAYS +
       " days. Emails sent from other places, such as Gmail, aren't included.";
     sentSection.appendChild(desc);
@@ -362,7 +362,7 @@ document.addEventListener("DOMContentLoaded", () => {
     bar.className = "sent-toolbar";
     const search = document.createElement("input");
     search.type = "search";
-    search.placeholder = "Search subject, name or email";
+    search.placeholder = "Search subject, message start, name or email";
     search.value = sentFilter;
     search.setAttribute("aria-label", "Search sent mail record");
     search.addEventListener("input", () => {
@@ -434,6 +434,13 @@ document.addEventListener("DOMContentLoaded", () => {
       summary.appendChild(subj);
       summary.appendChild(meta);
       details.appendChild(summary);
+
+      if (entry.preview) {
+        const prev = document.createElement("p");
+        prev.className = "sent-preview";
+        prev.textContent = entry.preview;
+        details.appendChild(prev);
+      }
 
       ["to", "cc", "bcc"].forEach((f) => {
         const people = entry[f] || [];

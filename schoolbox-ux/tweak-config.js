@@ -251,7 +251,7 @@ const TWEAK_GROUPS = [
         id: "sentMailRecord",
         since: "1.2.11",
         label: "Sent mail record",
-        description: "Keeps a private list of who each email you send from Schoolbox was addressed to (subject, time, To/CC/BCC; never the message). Stored only in this browser for 100 days, viewable and deletable below",
+        description: "Keeps a private list of who each email you send from Schoolbox was addressed to (subject, time, To/CC/BCC and the first 10 words of the message). Stored only in this browser for 100 days, viewable and deletable below",
       },
     ],
   },
@@ -302,7 +302,7 @@ const CHANGELOG = [
       },
       {
         title: "Sent mail record",
-        text: "A private list of who each Schoolbox email was sent to, so you can check later who was contacted. Kept only in your browser for 100 days (never the message itself); search, export or delete it at the bottom of this page. Turn it off in the Webmail group.",
+        text: "A private list of who each Schoolbox email was sent to, so you can check later who was contacted. Kept only in your browser for 100 days (with its subject and the first 10 words of the message); search, export or delete it at the bottom of this page. Turn it off in the Webmail group.",
       },
       {
         title: "My duties on the Timetable page",
