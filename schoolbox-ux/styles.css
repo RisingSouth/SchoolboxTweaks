@@ -2466,8 +2466,20 @@ a.fc-timegrid-event.fc-timegrid-event-short .my-tt-links { top: 100%; }
   font: inherit;
 }
 .my-added-link--more[hidden] { display: none; }
-.my-added-link.my-added-link--more { min-width: 22px; padding: 0 3px; }
-a.fc-timegrid-event .my-added-link.my-added-link--more { height: 22px; min-width: 22px; }
+.my-added-link.my-added-link--more {
+  height: 14px;
+  min-width: 14px;
+  width: 14px;
+  padding: 0;
+  border-radius: 4px;
+  align-self: center;
+  opacity: 0.75;
+}
+.my-added-link--more svg { width: 10px; height: 10px; }
+.my-added-link--more:hover,
+.my-added-link--more:focus-visible,
+.my-added-link--more[aria-expanded="true"] { opacity: 1; }
+a.fc-timegrid-event .my-added-link.my-added-link--more { height: 14px; min-width: 14px; }
 .my-more-menu {
   position: fixed;
   z-index: 100000;
