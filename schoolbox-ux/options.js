@@ -266,6 +266,221 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+
+  // Sent mail record viewer. Reads and writes chrome.storage.local
+  // directly (not part of the Save bar): entries are the user's own
+  // private log, so Delete/Clear take effect straight away.
+  const sentSection = document.getElementById("sent-mail");
+  let sentLog = [];
+  let sentFilter = "";
+  let confirmingClear = false;
+
+  function loadSentMail() {
+    chrome.storage.local.get({ [SENT_MAIL_KEY]: [] }, (stored) => {
+      sentLog = pruneSentMailLog(stored[SENT_MAIL_KEY]);
+      if (sentLog.length !== (stored[SENT_MAIL_KEY] || []).length) {
+        chrome.storage.local.set({ [SENT_MAIL_KEY]: sentLog });
+      }
+      renderSentMail();
+    });
+  }
+
+  function saveSentMail(list) {
+    sentLog = list;
+    chrome.storage.local.set({ [SENT_MAIL_KEY]: list }, renderSentMail);
+  }
+
+  function formatSentTime(ts) {
+    return new Date(ts).toLocaleString(undefined, {
+      weekday: "short", day: "numeric", month: "short", year: "numeric",
+      hour: "numeric", minute: "2-digit",
+    });
+  }
+
+  function recipientLabel(r) {
+    return r.name ? r.name + " <" + r.email + ">" : r.email;
+  }
+
+  function entryMatches(entry, q) {
+    if (!q) return true;
+    const hay = [entry.subject]
+      .concat(["to", "cc", "bcc"].flatMap((f) => (entry[f] || []).map((r) => r.name + " " + r.email)))
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(q);
+  }
+
+  function csvCell(v) {
+    return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+  }
+
+  function exportSentMailCsv() {
+    const rows = [["Sent", "Subject", "Field", "Name", "Email"]];
+    sentLog.forEach((e) => {
+      ["to", "cc", "bcc"].forEach((f) => {
+        (e[f] || []).forEach((r) => {
+          rows.push([new Date(e.ts).toISOString(), e.subject, f.toUpperCase(), r.name, r.email]);
+        });
+      });
+    });
+    const blob = new Blob([rows.map((r) => r.map(csvCell).join(",")).join("\r\n")], {
+      type: "text/csv",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "sent-mail-record.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  function renderSentMail() {
+    sentSection.textContent = "";
+
+    const heading = document.createElement("h2");
+    heading.textContent = "Sent mail record";
+    sentSection.appendChild(heading);
+
+    const desc = document.createElement("p");
+    desc.className = "tweak-desc";
+    desc.textContent =
+      "Who each email you sent from Schoolbox was addressed to. Kept only in this browser (not synced), never the message itself, and deleted automatically after " +
+      SENT_MAIL_RETENTION_DAYS +
+      " days. Emails sent from other places, such as Gmail, aren't included.";
+    sentSection.appendChild(desc);
+
+    if (!sentLog.length) {
+      const empty = document.createElement("p");
+      empty.className = "sent-empty";
+      empty.textContent = "Nothing recorded yet. Emails you send from Schoolbox will appear here.";
+      sentSection.appendChild(empty);
+      return;
+    }
+
+    const bar = document.createElement("div");
+    bar.className = "sent-toolbar";
+    const search = document.createElement("input");
+    search.type = "search";
+    search.placeholder = "Search subject, name or email";
+    search.value = sentFilter;
+    search.setAttribute("aria-label", "Search sent mail record");
+    search.addEventListener("input", () => {
+      sentFilter = search.value.trim().toLowerCase();
+      renderSentList();
+    });
+    const exportBtn = document.createElement("button");
+    exportBtn.type = "button";
+    exportBtn.textContent = "Export CSV";
+    exportBtn.addEventListener("click", exportSentMailCsv);
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "sent-danger";
+    clearBtn.textContent = confirmingClear ? "Delete everything?" : "Clear all";
+    clearBtn.addEventListener("click", () => {
+      if (!confirmingClear) {
+        confirmingClear = true;
+        renderSentMail();
+        return;
+      }
+      confirmingClear = false;
+      saveSentMail([]);
+    });
+    bar.appendChild(search);
+    bar.appendChild(exportBtn);
+    bar.appendChild(clearBtn);
+    if (confirmingClear) {
+      const keep = document.createElement("button");
+      keep.type = "button";
+      keep.textContent = "Keep";
+      keep.addEventListener("click", () => {
+        confirmingClear = false;
+        renderSentMail();
+      });
+      bar.appendChild(keep);
+    }
+    sentSection.appendChild(bar);
+
+    const list = document.createElement("div");
+    list.id = "sent-list";
+    sentSection.appendChild(list);
+    renderSentList();
+  }
+
+  function renderSentList() {
+    const list = document.getElementById("sent-list");
+    if (!list) return;
+    list.textContent = "";
+    const shown = sentLog.filter((e) => entryMatches(e, sentFilter));
+    if (!shown.length) {
+      const none = document.createElement("p");
+      none.className = "sent-empty";
+      none.textContent = "No matches.";
+      list.appendChild(none);
+      return;
+    }
+    shown.forEach((entry) => {
+      const details = document.createElement("details");
+      details.className = "sent-entry";
+
+      const summary = document.createElement("summary");
+      const subj = document.createElement("span");
+      subj.className = "sent-subject";
+      subj.textContent = entry.subject;
+      const meta = document.createElement("span");
+      meta.className = "sent-meta";
+      const n = ["to", "cc", "bcc"].reduce((c, f) => c + (entry[f] || []).length, 0);
+      meta.textContent = formatSentTime(entry.ts) + " · " + n + (n === 1 ? " recipient" : " recipients");
+      summary.appendChild(subj);
+      summary.appendChild(meta);
+      details.appendChild(summary);
+
+      ["to", "cc", "bcc"].forEach((f) => {
+        const people = entry[f] || [];
+        if (!people.length) return;
+        const label = document.createElement("p");
+        label.className = "sent-field";
+        label.textContent = f.toUpperCase() + " (" + people.length + ")";
+        details.appendChild(label);
+        const ul = document.createElement("ul");
+        ul.className = "sent-people";
+        people.forEach((r) => {
+          const li = document.createElement("li");
+          li.textContent = recipientLabel(r);
+          ul.appendChild(li);
+        });
+        details.appendChild(ul);
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "sent-actions";
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.textContent = "Copy addresses";
+      copy.addEventListener("click", () => {
+        const emails = ["to", "cc", "bcc"].flatMap((f) => (entry[f] || []).map((r) => r.email));
+        navigator.clipboard.writeText(emails.join(", ")).then(() => {
+          copy.textContent = "Copied";
+          setTimeout(() => (copy.textContent = "Copy addresses"), 1500);
+        });
+      });
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "sent-danger";
+      del.textContent = "Delete";
+      del.addEventListener("click", () => saveSentMail(sentLog.filter((e) => e.id !== entry.id)));
+      actions.appendChild(copy);
+      actions.appendChild(del);
+      details.appendChild(actions);
+
+      list.appendChild(details);
+    });
+  }
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[SENT_MAIL_KEY]) loadSentMail();
+  });
+
   chrome.storage.sync.get(
     { tweaksEnabled: true, tweakToggles: {}, gradeCutoffs: {}, lastSeenVersion: "0" },
     (result) => {
@@ -278,6 +493,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderWhatsNew();
       renderGroups();
       renderGradeScales();
+      loadSentMail();
       applyMasterDisabledState();
     }
   );

@@ -5,6 +5,20 @@
 // can never drift out of sync with each other. Add a new tweak here
 // first, then gate its function call in content.js's applyTweaks().
 
+// Sent mail record (see content.js and options.js). Kept only in this
+// browser (chrome.storage.local, never synced) and pruned on write.
+const SENT_MAIL_KEY = "sentMailLog";
+const SENT_MAIL_RETENTION_DAYS = 100;
+const SENT_MAIL_MAX_ENTRIES = 1000;
+
+function pruneSentMailLog(list, now) {
+  const cutoff = (now || Date.now()) - SENT_MAIL_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  return (Array.isArray(list) ? list : [])
+    .filter((e) => e && typeof e.ts === "number" && e.ts >= cutoff)
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, SENT_MAIL_MAX_ENTRIES);
+}
+
 const TWEAK_GROUPS = [
   {
     name: "Dashboard",
@@ -231,6 +245,17 @@ const TWEAK_GROUPS = [
     ],
   },
   {
+    name: "Webmail",
+    tweaks: [
+      {
+        id: "sentMailRecord",
+        since: "1.2.11",
+        label: "Sent mail record",
+        description: "Keeps a private list of who each email you send from Schoolbox was addressed to (subject, time, To/CC/BCC; never the message). Stored only in this browser for 100 days, viewable and deletable below",
+      },
+    ],
+  },
+  {
     name: "Assessment status page",
     tweaks: [
       {
@@ -270,6 +295,10 @@ const CHANGELOG = [
       {
         title: "Class buttons on the Timetable page",
         text: "Hover (or Tab to) a lesson on the Timetable page for Class List, Markbook and Go to class. Clicking a lesson also adds a Course page button to its pop-up. Turn it off in the Timetable page group.",
+      },
+      {
+        title: "Sent mail record",
+        text: "A private list of who each Schoolbox email was sent to, so you can check later who was contacted. Kept only in your browser for 100 days (never the message itself); search, export or delete it at the bottom of this page. Turn it off in the Webmail group.",
       },
       {
         title: "My duties on the Timetable page",

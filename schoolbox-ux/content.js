@@ -49,6 +49,10 @@
     if (tweakToggles.classListStudentCount) updateClassListStudentCount();
     if (tweakToggles.classListExportCsv) addClassListCsvExport();
     if (tweakToggles.classListGmailCompose) addGmailComposeToClassListModal();
+    if (tweakToggles.sentMailRecord) {
+      addSentMailRecording();
+      commitPendingSentMail();
+    }
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
     if (tweakToggles.timetablePageClassButtons) {
       addTimetablePageClassButtons();
@@ -2738,6 +2742,93 @@
       if (targetCell && flagRow && flagRow.parentElement !== targetCell) {
         targetCell.appendChild(flagRow);
       }
+    });
+  }
+
+  // Sent mail record. On Schoolbox's compose form (#mailForm) the To, CC
+  // and BCC hidden inputs hold the recipients as a comma-separated list
+  // ("Name" <email>). When the form is submitted we note who it was
+  // addressed to in sessionStorage; on the next page load, if we're no
+  // longer on the compose form, the send went through and the note is
+  // saved to the browser-only log (chrome.storage.local, pruned to 100
+  // days; see tweak-config.js). The message text is never read.
+  const SENT_MAIL_PENDING_KEY = "mySentMailPending";
+  const SENT_MAIL_PENDING_MAX_AGE_MS = 3 * 60 * 1000;
+  let sentMailPendingChecked = false;
+
+  function parseMailRecipients(value) {
+    const out = [];
+    String(value || "")
+      .split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+      .forEach((part) => {
+        const text = part.trim();
+        if (!text) return;
+        const m = text.match(/^"?(.*?)"?\s*<([^<>]+)>$/);
+        if (m) out.push({ name: m[1].trim(), email: m[2].trim() });
+        else out.push({ name: "", email: text.replace(/^"|"$/g, "") });
+      });
+    return out;
+  }
+
+  function snapshotSentMail(form) {
+    const val = (id) => {
+      const el = form.querySelector("#" + id);
+      return el ? el.value : "";
+    };
+    const to = parseMailRecipients(val("to"));
+    const cc = parseMailRecipients(val("cc"));
+    const bcc = parseMailRecipients(val("bcc"));
+    if (!to.length && !cc.length && !bcc.length) return;
+    const entry = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      ts: Date.now(),
+      subject: val("subject").trim() || "(no subject)",
+      to,
+      cc,
+      bcc,
+    };
+    try {
+      sessionStorage.setItem(SENT_MAIL_PENDING_KEY, JSON.stringify(entry));
+    } catch (e) {}
+  }
+
+  function addSentMailRecording() {
+    const form = document.getElementById("mailForm");
+    if (!form || form.dataset.mySentMailHooked) return;
+    form.dataset.mySentMailHooked = "1";
+    form.addEventListener("submit", () => snapshotSentMail(form), true);
+  }
+
+  function commitPendingSentMail() {
+    if (sentMailPendingChecked) return;
+    sentMailPendingChecked = true;
+
+    let raw = null;
+    try {
+      raw = sessionStorage.getItem(SENT_MAIL_PENDING_KEY);
+    } catch (e) {
+      return;
+    }
+    if (!raw) return;
+    try {
+      sessionStorage.removeItem(SENT_MAIL_PENDING_KEY);
+    } catch (e) {}
+
+    // Back on the compose form: the send didn't go through.
+    if (document.getElementById("mailForm")) return;
+
+    let entry;
+    try {
+      entry = JSON.parse(raw);
+    } catch (e) {
+      return;
+    }
+    if (!entry || typeof entry.ts !== "number") return;
+    if (Date.now() - entry.ts > SENT_MAIL_PENDING_MAX_AGE_MS) return;
+
+    chrome.storage.local.get({ [SENT_MAIL_KEY]: [] }, (stored) => {
+      const log = pruneSentMailLog([entry].concat(stored[SENT_MAIL_KEY] || []));
+      chrome.storage.local.set({ [SENT_MAIL_KEY]: log });
     });
   }
 

@@ -46,3 +46,9 @@ On the new pastoral record page, **Templates** saves and re-applies your own not
 - **My duties**: duties added in the nav panel's My duties section also show on the Timetable week and day views. Before and after school duties appear as a line above the day.
 
 Each has its own toggle under "Timetable page" in the settings.
+
+## Sent mail record
+
+When you send an email from Schoolbox Webmail, the extension notes the subject, time and the To/CC/BCC recipients (never the message body). It's saved only in this browser (`chrome.storage.local`, not synced) and deleted automatically after 100 days. View, search, export (CSV) or delete it at the bottom of the extension settings page. Turn it off in the Webmail group.
+
+Limits: sends to a class or group address record that address, not its members; emails sent from Gmail (including "Open students in Gmail") aren't recorded; a send is only recorded once the next page loads without the compose form.
