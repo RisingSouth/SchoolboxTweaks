@@ -50,7 +50,10 @@
     if (tweakToggles.classListExportCsv) addClassListCsvExport();
     if (tweakToggles.classListGmailCompose) addGmailComposeToClassListModal();
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
-    if (tweakToggles.timetablePageClassButtons) addTimetablePageClassButtons();
+    if (tweakToggles.timetablePageClassButtons) {
+      addTimetablePageClassButtons();
+      addCourseLinkToTimetableModal();
+    }
     if (tweakToggles.timetablePageDuties) addMyDutiesToTimetablePage();
     if (tweakToggles.dashboardRelief) addReliefCheckToDashboard();
     if (tweakToggles.dashboardTimetableChanges) addTimetableChangesToStrip();
@@ -1657,7 +1660,7 @@
   // the dashboard timetable boxes and the Timetable page's events.
   // title/aria-label carry the name for touch and screen readers; the
   // visible label expands on hover.
-  function buildClassLinkIcons(classId, { withMore = false } = {}) {
+  function buildClassLinkIcons(classId) {
     const wrapper = document.createElement("div");
     wrapper.className = "my-added-links";
 
@@ -1716,28 +1719,6 @@
         "M10 20v-6h4v6",
       ])
     );
-    if (!withMore) return wrapper;
-
-    // More (...) button: holds the Course page link. Hidden until we
-    // know the class has a course page (see revealCourseIcon).
-    const more = document.createElement("button");
-    more.type = "button";
-    more.className = "my-added-link my-added-link--more";
-    more.title = "More";
-    more.setAttribute("aria-label", "More");
-    more.setAttribute("aria-haspopup", "menu");
-    more.hidden = true;
-    more.dataset.classId = classId;
-    more.innerHTML =
-      '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">' +
-      '<circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
-    more.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleMoreMenu(more);
-    });
-    wrapper.appendChild(more);
-    wrapper.dataset.classId = classId;
     return wrapper;
   }
 
@@ -1779,82 +1760,35 @@
     return p;
   }
 
-  function revealCourseIcon(wrapper) {
-    const icon = wrapper.querySelector(".my-added-link--more[hidden]");
-    if (!icon || icon.dataset.looking) return;
-    icon.dataset.looking = "1";
-    lookUpCourseHref(icon.dataset.classId).then((href) => {
-      delete icon.dataset.looking;
-      if (!href) return;
-      icon.dataset.courseHref = href;
-      icon.hidden = false;
+  // The pop-up that opens when you click a lesson on the Timetable page
+  // has a "Go to homepage" button (the class's own page). Next to it we
+  // add "Course page", once the class page tells us where the course is.
+  // Vue can redraw the pop-up, so this re-checks on every pass and only
+  // adds the button when it's missing.
+  function addCourseLinkToTimetableModal() {
+    if (!isTimetablePage()) return;
+    document.querySelectorAll(".reveal-modal.open .component-action .actions").forEach((actions) => {
+      if (actions.querySelector(".my-course-action")) return;
+      const home = Array.from(actions.querySelectorAll('a.button[href^="/homepage/"]')).find(
+        (a) => /^\/homepage\/\d+\/?$/.test(a.getAttribute("href"))
+      );
+      if (!home) return;
+      const classId = home.getAttribute("href").match(/\d+/)[0];
+
+      lookUpCourseHref(classId).then((href) => {
+        if (!href || !actions.isConnected || actions.querySelector(".my-course-action")) return;
+        const span = document.createElement("span");
+        span.className = "my-course-action";
+        const a = document.createElement("a");
+        a.className = "button";
+        a.href = href;
+        a.textContent = "Course page";
+        span.appendChild(a);
+        const anchor = home.closest("span") || home;
+        anchor.after(document.createTextNode(" "), span);
+      });
     });
   }
-
-  // The small menu opened by the (...) button. It lives on <body> so a
-  // lesson box's edges can't clip it, and closes on any outside click,
-  // Escape or scroll.
-  let openMoreMenu = null;
-
-  function closeMoreMenu() {
-    if (!openMoreMenu) return;
-    openMoreMenu.button.setAttribute("aria-expanded", "false");
-    openMoreMenu.menu.remove();
-    openMoreMenu = null;
-  }
-
-  function toggleMoreMenu(button) {
-    const wasOpenHere = openMoreMenu && openMoreMenu.button === button;
-    closeMoreMenu();
-    if (wasOpenHere || !button.dataset.courseHref) return;
-
-    const menu = document.createElement("div");
-    menu.className = "my-more-menu";
-    menu.setAttribute("role", "menu");
-    const link = document.createElement("a");
-    link.href = button.dataset.courseHref;
-    link.setAttribute("role", "menuitem");
-    link.textContent = "Course page";
-    menu.appendChild(link);
-    document.body.appendChild(menu);
-
-    const r = button.getBoundingClientRect();
-    menu.style.top = `${Math.round(r.bottom + 4)}px`;
-    menu.style.left = `${Math.round(Math.max(8, r.right - menu.offsetWidth))}px`;
-    button.setAttribute("aria-expanded", "true");
-    openMoreMenu = { button, menu, openedAt: Date.now() };
-    link.focus({ preventScroll: true });
-  }
-
-  document.addEventListener("click", (e) => {
-    if (openMoreMenu && !openMoreMenu.menu.contains(e.target)) closeMoreMenu();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && openMoreMenu) {
-      const b = openMoreMenu.button;
-      closeMoreMenu();
-      b.focus();
-    }
-  });
-  window.addEventListener(
-    "scroll",
-    () => {
-      // Ignore the scroll a click itself can cause just after opening.
-      if (openMoreMenu && Date.now() - openMoreMenu.openedAt > 400) closeMoreMenu();
-    },
-    true
-  );
-
-  document.addEventListener("mouseover", (e) => {
-    const box = e.target.closest && e.target.closest(".timetable-subject, a.fc-timegrid-event");
-    const w = box && box.querySelector(".my-added-links");
-    if (w) revealCourseIcon(w);
-  });
-  document.addEventListener("focusin", (e) => {
-    const box = e.target.closest && e.target.closest(".timetable-subject, a.fc-timegrid-event");
-    const w = box && box.querySelector(".my-added-links");
-    if (w) revealCourseIcon(w);
-  });
 
   function addClassListAndMarkbookLinks() {
     if (!isDashboardPage()) return;
@@ -3195,7 +3129,7 @@
       const title = event.querySelector("span.fc-event-title");
       if (!title || !/\([^)]+\)/.test(title.textContent)) return;
 
-      const icons = buildClassLinkIcons(groupClass.slice("group".length), { withMore: true });
+      const icons = buildClassLinkIcons(groupClass.slice("group".length));
       icons.classList.add("my-tt-links");
       // A click on an icon is the icon's, not the calendar's.
       icons.addEventListener("click", (e) => e.stopPropagation());

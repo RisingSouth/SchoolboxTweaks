@@ -42,7 +42,7 @@ On the new pastoral record page, **Templates** saves and re-applies your own not
 
 ## Timetable page
 
-- **Class buttons**: hover or Tab to a lesson on `/timetable` for Class List, Markbook and Go to class. The ⋯ button opens the class's Course page, found by reading the class page once on first hover and remembering it (stored in the browser's local storage as `myClassCourseLinks`).
+- **Class buttons**: hover or Tab to a lesson on `/timetable` for Class List, Markbook and Go to class. The lesson pop-up (click a lesson) gets a Course page button next to Go to homepage. The course is found by reading the class page once and remembering it (stored in the browser's local storage as `myClassCourseLinks`).
 - **My duties**: duties added in the nav panel's My duties section also show on the Timetable week and day views. Before and after school duties appear as a line above the day.
 
 Each has its own toggle under "Timetable page" in the settings.
