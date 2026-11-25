@@ -50,6 +50,8 @@
     if (tweakToggles.classListExportCsv) addClassListCsvExport();
     if (tweakToggles.classListGmailCompose) addGmailComposeToClassListModal();
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
+    if (tweakToggles.timetablePageClassButtons) addTimetablePageClassButtons();
+    if (tweakToggles.timetablePageDuties) addMyDutiesToTimetablePage();
     if (tweakToggles.dashboardRelief) addReliefCheckToDashboard();
     if (tweakToggles.dashboardTimetableChanges) addTimetableChangesToStrip();
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
@@ -1650,6 +1652,73 @@
   // doesn't create a new window for Chrome to redirect, so it isn't
   // caught by that capture path. NOT yet independently confirmed on
   // this specific link - worth a quick click-test after reload.
+  // The three small icon links shown on a lesson: Class List, Markbook
+  // and Go to class (the class's own page, /homepage/{id}). Shared by
+  // the dashboard timetable boxes and the Timetable page's events.
+  // title/aria-label carry the name for touch and screen readers; the
+  // visible label expands on hover.
+  function buildClassLinkIcons(classId) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "my-added-links";
+
+    const makeIconLink = (href, label, pathData) => {
+      const a = document.createElement("a");
+      a.href = href;
+      a.className = "my-added-link";
+      a.title = label;
+      a.setAttribute("aria-label", label);
+
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("width", "16");
+      svg.setAttribute("height", "16");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke", "currentColor");
+      svg.setAttribute("stroke-width", "2");
+      svg.setAttribute("stroke-linecap", "round");
+      svg.setAttribute("stroke-linejoin", "round");
+      svg.setAttribute("aria-hidden", "true");
+      pathData.forEach((d) => {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", d);
+        svg.appendChild(path);
+      });
+
+      const text = document.createElement("span");
+      text.className = "my-added-link-label";
+      text.textContent = label;
+
+      a.appendChild(svg);
+      a.appendChild(text);
+      return a;
+    };
+
+    // Users (Class List), table (Markbook) and house (Go to class).
+    wrapper.appendChild(
+      makeIconLink(`/learning/class/${classId}`, "Class List", [
+        "M9 7a4 4 0 1 0 8 0a4 4 0 1 0-8 0",
+        "M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2",
+        "M16 3.1a4 4 0 0 1 0 7.8",
+        "M21 21v-2a4 4 0 0 0-3-3.9",
+      ])
+    );
+    wrapper.appendChild(
+      makeIconLink(`/learning/markbook/class/${classId}`, "Markbook", [
+        "M4 4h16v16H4z",
+        "M4 10h16",
+        "M10 4v16",
+      ])
+    );
+    wrapper.appendChild(
+      makeIconLink(`/homepage/${classId}`, "Go to class", [
+        "M3 11l9-8 9 8",
+        "M5 10v10h14V10",
+        "M10 20v-6h4v6",
+      ])
+    );
+    return wrapper;
+  }
+
   function addClassListAndMarkbookLinks() {
     if (!isDashboardPage()) return;
 
@@ -1672,62 +1741,7 @@
       const classId = codeToId.get(normaliseClassCode(codeEl.textContent));
       if (!classId) return;
 
-      // Two small icon buttons in the box's top-right corner (see
-      // styles.css) - always visible, no extra height, label expands
-      // on hover. Same hrefs as before; title/aria-label carry the
-      // name for touch and screen readers.
-      const wrapper = document.createElement("div");
-      wrapper.className = "my-added-links";
-
-      const makeIconLink = (href, label, pathData) => {
-        const a = document.createElement("a");
-        a.href = href;
-        a.className = "my-added-link";
-        a.title = label;
-        a.setAttribute("aria-label", label);
-
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute("viewBox", "0 0 24 24");
-        svg.setAttribute("width", "16");
-        svg.setAttribute("height", "16");
-        svg.setAttribute("fill", "none");
-        svg.setAttribute("stroke", "currentColor");
-        svg.setAttribute("stroke-width", "2");
-        svg.setAttribute("stroke-linecap", "round");
-        svg.setAttribute("stroke-linejoin", "round");
-        svg.setAttribute("aria-hidden", "true");
-        pathData.forEach((d) => {
-          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          path.setAttribute("d", d);
-          svg.appendChild(path);
-        });
-
-        const text = document.createElement("span");
-        text.className = "my-added-link-label";
-        text.textContent = label;
-
-        a.appendChild(svg);
-        a.appendChild(text);
-        return a;
-      };
-
-      // Users (Class List) and table (Markbook) glyphs.
-      wrapper.appendChild(
-        makeIconLink(`/learning/class/${classId}`, "Class List", [
-          "M9 7a4 4 0 1 0 8 0a4 4 0 1 0-8 0",
-          "M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2",
-          "M16 3.1a4 4 0 0 1 0 7.8",
-          "M21 21v-2a4 4 0 0 0-3-3.9",
-        ])
-      );
-      wrapper.appendChild(
-        makeIconLink(`/learning/markbook/class/${classId}`, "Markbook", [
-          "M4 4h16v16H4z",
-          "M4 10h16",
-          "M10 4v16",
-        ])
-      );
-      box.appendChild(wrapper);
+      box.appendChild(buildClassLinkIcons(classId));
     });
   }
 
@@ -2999,6 +3013,240 @@
   }
 
   // ---------------------------------------------------------------
+  // Timetable page (/timetable): class buttons and My duties
+  //
+  // The page is a FullCalendar week (or day) grid. Every lesson is an
+  //   <a class="fc-event fc-timegrid-event ... group{classId}">
+  // so the class id is on the event itself - no lookup needed, and it
+  // works for any week, not just today. Events have no href; a click
+  // opens Schoolbox's own pop-up.
+  //
+  // 1. Class buttons: the same three icons as the dashboard, shown on
+  //    hover or keyboard focus (the boxes are small; Homeroom is ~15px
+  //    tall). Clicking an icon follows it and does NOT open the
+  //    pop-up. Only events with a class id and a "(CODE)" in the title
+  //    get them - never duties, bookings or other events.
+  //
+  // 2. My duties: the teacher's weekly duties (see "My duties" above)
+  //    drawn as dashed boxes at their period's time, in our own layer
+  //    inside each day column so the calendar's own boxes are never
+  //    touched. Before/after-school duties fall outside the grid's
+  //    8:30-3:30 axis, so they go in a line under the day's heading.
+  //    A box overlapping a lesson takes the right 40% of the column
+  //    (the lesson is not resized). Every week shows them, like the
+  //    dashboard does for each day. Time-grid views only.
+  //
+  // NOT confirmed live: Schoolbox's FullCalendar re-rendering (all of
+  // this re-runs from the shared mutation observer and only writes
+  // when something changed); bell times for Session 3/4 are from
+  // Edval data, the rest from this page.
+  // ---------------------------------------------------------------
+
+  function isTimetablePage() {
+    return (
+      /^\/timetable(?:\/|$)/.test(window.location.pathname) &&
+      !!document.querySelector("#timetable-calendar .fc")
+    );
+  }
+
+  function addTimetablePageClassButtons() {
+    if (!isTimetablePage()) return;
+    document.querySelectorAll("a.fc-timegrid-event").forEach((event) => {
+      if (event.querySelector(".my-tt-links")) return;
+      const groupClass = Array.from(event.classList).find((c) => /^group\d+$/.test(c));
+      if (!groupClass) return;
+      const title = event.querySelector("span.fc-event-title");
+      if (!title || !/\([^)]+\)/.test(title.textContent)) return;
+
+      const icons = buildClassLinkIcons(groupClass.slice("group".length));
+      icons.classList.add("my-tt-links");
+      // A click on an icon is the icon's, not the calendar's.
+      icons.addEventListener("click", (e) => e.stopPropagation());
+      icons.addEventListener("keydown", (e) => e.stopPropagation());
+      event.appendChild(icons);
+    });
+  }
+
+  // Bell times as "HH:MM". Sessions 1, 2, 5, 6 and Homeroom are read
+  // off the Timetable page; 3 and 4 come from Edval. Recess and Lunch
+  // are the gaps between sessions. Before/after school are not in the
+  // grid, so they have no time here.
+  const DUTY_PAGE_TIMES = {
+    HH: ["08:30", "08:40"],
+    "1H": ["08:45", "09:40"],
+    "2H": ["09:45", "10:40"],
+    RH: ["10:40", "11:00"],
+    "3H": ["11:00", "11:55"],
+    "4H": ["12:00", "12:55"],
+    LH: ["12:55", "13:30"],
+    "5H": ["13:30", "14:25"],
+    "6H": ["14:30", "15:25"],
+  };
+
+  function clockMinutes(hhmm) {
+    const [h, m] = hhmm.split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  function weekdayOfIsoDate(iso) {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d).getDay();
+  }
+
+  function addMyDutiesToTimetablePage() {
+    if (!isTimetablePage()) return;
+    chrome.storage.sync.get({ myDuties: [] }, (result) => {
+      renderDutiesOnTimetablePage(Array.isArray(result.myDuties) ? result.myDuties : []);
+    });
+  }
+
+  function renderDutiesOnTimetablePage(duties) {
+    const lanes = Array.from(
+      document.querySelectorAll("td.fc-timegrid-slot-lane[data-time]")
+    )
+      .map((el) => ({
+        minutes: clockMinutes(el.dataset.time.slice(0, 5)),
+        rect: el.getBoundingClientRect(),
+      }))
+      .sort((a, b) => a.minutes - b.minutes);
+    const slotMinutes =
+      lanes.length > 1 ? lanes[1].minutes - lanes[0].minutes : 30;
+    const lastEnd = lanes.length ? lanes[lanes.length - 1].minutes + slotMinutes : 0;
+
+    // Pixel offset of a clock time from the top of a day column. A
+    // column's frame starts at the first slot, so this only needs the
+    // first slot's time and one slot's height (the saved page's lane
+    // rects can't be compared to the frame's - only their size).
+    // The scale is read off a real lesson when one is on screen (its
+    // top edge and start time), so duties line up with the lessons
+    // beside them; the slot height is the fallback.
+    function lessonScale() {
+      const frame = document.querySelector("td.fc-timegrid-col .fc-timegrid-col-frame");
+      if (!frame || !lanes.length) return 0;
+      const frameTop = frame.getBoundingClientRect().top;
+      const scales = [];
+      document.querySelectorAll("a.fc-timegrid-event b.fc-event-title").forEach((b) => {
+        const m = /^(\d{1,2}):(\d{2})(am|pm)/i.exec(b.textContent.trim());
+        if (!m) return;
+        let h = Number(m[1]) % 12;
+        if (m[3].toLowerCase() === "pm") h += 12;
+        const start = h * 60 + Number(m[2]);
+        if (start - lanes[0].minutes < 30) return;
+        const column = b.closest("td.fc-timegrid-col");
+        const colFrame = column && column.querySelector(".fc-timegrid-col-frame");
+        const eventTop = b.closest("a.fc-timegrid-event").getBoundingClientRect().top;
+        if (!colFrame) return;
+        scales.push((eventTop - colFrame.getBoundingClientRect().top) / (start - lanes[0].minutes));
+      });
+      if (!scales.length) return 0;
+      scales.sort((a, b) => a - b);
+      return scales[Math.floor(scales.length / 2)];
+    }
+    const pxPerMinute = lessonScale() || (lanes.length ? lanes[0].rect.height / slotMinutes : 0);
+    function yOf(minutes) {
+      if (!lanes.length || pxPerMinute <= 0) return null;
+      return (minutes - lanes[0].minutes) * pxPerMinute;
+    }
+
+    document.querySelectorAll("td.fc-timegrid-col[data-date]").forEach((col) => {
+      const date = col.dataset.date;
+      const frame = col.querySelector(".fc-timegrid-col-frame");
+      if (!frame) return;
+      const day = weekdayOfIsoDate(date);
+      const todays = day >= 1 && day <= 5 ? duties.filter((d) => d.day === day) : [];
+
+      // Boxes: duties with a time inside the grid.
+      const frameTop = frame.getBoundingClientRect().top;
+      // The lessons already in this column, as clock-minute ranges
+      // read from their own "9:45am - 10:40am" titles (not from pixel
+      // sizes, which depend on the grid's layout).
+      const lessonSpans = [];
+      frame.querySelectorAll("a.fc-timegrid-event b.fc-event-title").forEach((b) => {
+        const m = /^(\d{1,2}):(\d{2})(am|pm)\s*-\s*(\d{1,2}):(\d{2})(am|pm)/i.exec(
+          b.textContent.trim()
+        );
+        if (!m) return;
+        const to24 = (h, min, ap) => (Number(h) % 12 + (ap.toLowerCase() === "pm" ? 12 : 0)) * 60 + Number(min);
+        lessonSpans.push([to24(m[1], m[2], m[3]), to24(m[4], m[5], m[6])]);
+      });
+      const boxes = [];
+      todays.forEach((duty) => {
+        const span = DUTY_PAGE_TIMES[duty.code];
+        if (!span) return;
+        const start = clockMinutes(span[0]);
+        const end = clockMinutes(span[1]);
+        if (start < lanes[0].minutes || end > lastEnd) return;
+        const top = yOf(start);
+        const bottom = yOf(end);
+        if (top === null || bottom === null) return;
+        const overlaps = lessonSpans.some(([from, to]) => from < end && to > start);
+        boxes.push({
+          id: duty.id,
+          label: duty.label,
+          top: Math.round(top),
+          height: Math.max(14, Math.round(bottom - top)),
+          narrow: overlaps,
+        });
+      });
+
+      const sig = JSON.stringify(boxes);
+      let layer = frame.querySelector(":scope > .my-duty-layer");
+      if (!boxes.length) {
+        if (layer) layer.remove();
+      } else if (!layer || layer.dataset.sig !== sig) {
+        if (layer) layer.remove();
+        layer = document.createElement("div");
+        layer.className = "my-duty-layer";
+        layer.dataset.sig = sig;
+        boxes.forEach((b) => {
+          const box = document.createElement("div");
+          box.className = "my-duty-block" + (b.narrow ? " my-duty-block--narrow" : "");
+          box.style.top = b.top + "px";
+          box.style.height = b.height + "px";
+          box.title = "Duty: " + b.label;
+          const text = document.createElement("span");
+          text.textContent = "Duty: " + b.label;
+          box.appendChild(text);
+          layer.appendChild(box);
+        });
+        frame.appendChild(layer);
+      }
+
+      // Before/after school: a line under the day's heading.
+      const header = document.querySelector(
+        `th.fc-col-header-cell[data-date="${date}"] .fc-scrollgrid-sync-inner`
+      );
+      if (header) {
+        const outside = [
+          ["Before school", "BSH"],
+          ["After school", "ASH"],
+        ]
+          .map(([label, code]) => {
+            const names = todays.filter((d) => d.code === code).map((d) => d.label);
+            return names.length ? label + ": " + names.join(", ") : "";
+          })
+          .filter(Boolean);
+        const outsideSig = JSON.stringify(outside);
+        let line = header.querySelector(":scope > .my-duty-outside");
+        if (!outside.length) {
+          if (line) line.remove();
+        } else if (!line || line.dataset.sig !== outsideSig) {
+          if (line) line.remove();
+          line = document.createElement("div");
+          line.className = "my-duty-outside";
+          line.dataset.sig = outsideSig;
+          outside.forEach((t) => {
+            const row = document.createElement("div");
+            row.textContent = t;
+            line.appendChild(row);
+          });
+          header.appendChild(line);
+        }
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------
   // Dashboard: "Check relief"
   //
   // A button under the timetable heading. On click the background
@@ -3311,9 +3559,61 @@
   }
 
   // Builds the "My duties" collapsible section of the nav dropdown
-  // panel: the current list (with delete) plus a small add-duty form.
-  // Called from toggleNavPanel() once per panel open, mirroring the
-  // "Other apps" folder's collapsible pattern already used there.
+  // panel: the current list (edit / delete) plus an add form where
+  // several weekdays can be picked at once (one duty is stored per
+  // day). Called from toggleNavPanel() once per panel open, mirroring
+  // the "Other apps" folder's collapsible pattern already used there.
+  // Duties are one array under "myDuties" in chrome.storage.sync;
+  // [{id, day 1-5, code, label}].
+  function loadDuties(callback) {
+    chrome.storage.sync.get({ myDuties: [] }, (res) =>
+      callback(Array.isArray(res.myDuties) ? res.myDuties : [])
+    );
+  }
+
+  function saveDuties(list, callback) {
+    chrome.storage.sync.set({ myDuties: list }, () =>
+      callback(!chrome.runtime.lastError)
+    );
+  }
+
+  // Every place a duty can show needs redrawing after a change.
+  function refreshDutyViews() {
+    addMyDutiesToTimetable();
+    if (tweakToggles.timetablePageDuties) addMyDutiesToTimetablePage();
+  }
+
+  function buildDutyPeriodSelect() {
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "Period");
+
+    const sessionGroup = document.createElement("optgroup");
+    sessionGroup.label = "Sessions";
+    DUTY_SESSION_CODES.forEach((code) => {
+      const opt = document.createElement("option");
+      opt.value = code;
+      opt.textContent = dutyPeriodLabel(code);
+      sessionGroup.appendChild(opt);
+    });
+
+    const gapGroup = document.createElement("optgroup");
+    gapGroup.label = "Between sessions";
+    DUTY_GAP_PERIODS.forEach((gap) => {
+      const opt = document.createElement("option");
+      opt.value = gap.code;
+      opt.textContent = gap.label;
+      gapGroup.appendChild(opt);
+    });
+
+    select.appendChild(sessionGroup);
+    select.appendChild(gapGroup);
+    return select;
+  }
+
+  function dutyKey(day, code, label) {
+    return `${day}|${code}|${label.trim().toLowerCase()}`;
+  }
+
   function buildDutiesSection(panel) {
     const dutiesFolderButton = document.createElement("button");
     dutiesFolderButton.type = "button";
@@ -3346,48 +3646,34 @@
     const addForm = document.createElement("div");
     addForm.className = "my-duty-add-form";
 
-    const addRow = document.createElement("div");
-    addRow.className = "my-duty-add-row";
-
-    const daySelect = document.createElement("select");
-    Object.entries(DUTY_DAY_NAMES).forEach(([value, name]) => {
-      const opt = document.createElement("option");
-      opt.value = value;
-      opt.textContent = name;
-      daySelect.appendChild(opt);
+    const dayRow = document.createElement("div");
+    dayRow.className = "my-duty-days";
+    dayRow.setAttribute("role", "group");
+    dayRow.setAttribute("aria-label", "Days");
+    const dayButtons = Object.entries(DUTY_DAY_NAMES).map(([value, name]) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "my-duty-day";
+      b.dataset.day = value;
+      b.textContent = name.slice(0, 3);
+      b.title = name;
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", () => {
+        b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true");
+      });
+      dayRow.appendChild(b);
+      return b;
     });
+    addForm.appendChild(dayRow);
 
-    const periodSelect = document.createElement("select");
-
-    const sessionGroup = document.createElement("optgroup");
-    sessionGroup.label = "Sessions";
-    DUTY_SESSION_CODES.forEach((code) => {
-      const opt = document.createElement("option");
-      opt.value = code;
-      opt.textContent = dutyPeriodLabel(code);
-      sessionGroup.appendChild(opt);
-    });
-
-    const gapGroup = document.createElement("optgroup");
-    gapGroup.label = "Between sessions";
-    DUTY_GAP_PERIODS.forEach((gap) => {
-      const opt = document.createElement("option");
-      opt.value = gap.code;
-      opt.textContent = gap.label;
-      gapGroup.appendChild(opt);
-    });
-
-    periodSelect.appendChild(sessionGroup);
-    periodSelect.appendChild(gapGroup);
-
-    addRow.appendChild(daySelect);
-    addRow.appendChild(periodSelect);
-    addForm.appendChild(addRow);
+    const periodSelect = buildDutyPeriodSelect();
+    addForm.appendChild(periodSelect);
 
     const labelInput = document.createElement("input");
     labelInput.type = "text";
     labelInput.className = "my-duty-label-input";
     labelInput.placeholder = "e.g. Yard duty — MU quad";
+    labelInput.setAttribute("aria-label", "Duty name");
     addForm.appendChild(labelInput);
 
     const addButton = document.createElement("button");
@@ -3396,14 +3682,30 @@
     addButton.textContent = "Add duty";
     addForm.appendChild(addButton);
 
+    const message = document.createElement("div");
+    message.className = "my-duty-msg";
+    message.setAttribute("role", "status");
+    addForm.appendChild(message);
+
     dutiesBody.appendChild(addForm);
     panel.appendChild(dutiesBody);
 
+    function actionButton(label, text, onClick, cls) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "my-duty-row-button" + (cls ? " " + cls : "");
+      b.textContent = text;
+      b.title = label;
+      b.setAttribute("aria-label", label);
+      b.addEventListener("click", onClick);
+      return b;
+    }
+
     function refreshDutiesList() {
-      chrome.storage.sync.get({ myDuties: [] }, (res) => {
+      loadDuties((duties) => {
         dutiesList.textContent = "";
 
-        if (!res.myDuties.length) {
+        if (!duties.length) {
           const empty = document.createElement("div");
           empty.className = "my-duties-empty";
           empty.textContent = "No duties added yet.";
@@ -3411,9 +3713,9 @@
           return;
         }
 
-        res.myDuties
+        duties
           .slice()
-          .sort((a, b) => a.day - b.day)
+          .sort((a, b) => a.day - b.day || dutySessionOrder(a.code) - dutySessionOrder(b.code))
           .forEach((duty) => {
             const row = document.createElement("div");
             row.className = "my-duty-row";
@@ -3424,24 +3726,108 @@
               duty.code
             )} · ${duty.label}`;
             text.title = text.textContent;
-
-            const deleteButton = document.createElement("button");
-            deleteButton.type = "button";
-            deleteButton.className = "my-duty-row-delete";
-            deleteButton.textContent = "✕";
-            deleteButton.title = "Delete this duty";
-            deleteButton.addEventListener("click", () => {
-              chrome.storage.sync.get({ myDuties: [] }, (r2) => {
-                const updated = r2.myDuties.filter((d) => d.id !== duty.id);
-                chrome.storage.sync.set({ myDuties: updated }, () => {
-                  refreshDutiesList();
-                  addMyDutiesToTimetable();
-                });
-              });
-            });
-
             row.appendChild(text);
-            row.appendChild(deleteButton);
+
+            const buttons = document.createElement("span");
+            buttons.className = "my-duty-row-buttons";
+            row.appendChild(buttons);
+
+            function showButtons() {
+              buttons.textContent = "";
+              buttons.append(
+                actionButton("Edit this duty", "✎", showEdit),
+                actionButton("Delete this duty", "✕", showConfirm)
+              );
+            }
+
+            function showConfirm() {
+              buttons.textContent = "";
+              const ask = document.createElement("span");
+              ask.className = "my-duty-confirm";
+              ask.textContent = "Delete?";
+              buttons.append(
+                ask,
+                actionButton("Delete", "Delete", () => {
+                  loadDuties((current) => {
+                    saveDuties(current.filter((d) => d.id !== duty.id), (ok) => {
+                      if (!ok) {
+                        message.textContent = "Couldn't delete it. Chrome storage is unavailable.";
+                        return;
+                      }
+                      message.textContent = "";
+                      refreshDutiesList();
+                      refreshDutyViews();
+                    });
+                  });
+                }, "my-duty-danger"),
+                actionButton("Keep", "Keep", showButtons)
+              );
+            }
+
+            function showEdit() {
+              row.textContent = "";
+              row.classList.add("my-duty-row--edit");
+              const daySel = document.createElement("select");
+              daySel.setAttribute("aria-label", "Day");
+              Object.entries(DUTY_DAY_NAMES).forEach(([value, name]) => {
+                const opt = document.createElement("option");
+                opt.value = value;
+                opt.textContent = name;
+                daySel.appendChild(opt);
+              });
+              daySel.value = String(duty.day);
+              const periodSel = buildDutyPeriodSelect();
+              periodSel.value = duty.code;
+              const input = document.createElement("input");
+              input.type = "text";
+              input.className = "my-duty-label-input";
+              input.value = duty.label;
+              input.setAttribute("aria-label", "Duty name");
+              const save = actionButton("Save changes", "Save", () => {
+                const label = input.value.trim();
+                if (!label) {
+                  message.textContent = "Give the duty a name.";
+                  return;
+                }
+                loadDuties((current) => {
+                  const day = Number(daySel.value);
+                  const key = dutyKey(day, periodSel.value, label);
+                  if (current.some((d) => d.id !== duty.id && dutyKey(d.day, d.code, d.label) === key)) {
+                    message.textContent = "You already have that duty.";
+                    return;
+                  }
+                  const updated = current.map((d) =>
+                    d.id === duty.id ? { ...d, day, code: periodSel.value, label } : d
+                  );
+                  saveDuties(updated, (ok) => {
+                    if (!ok) {
+                      message.textContent = "Couldn't save. Chrome storage is unavailable.";
+                      return;
+                    }
+                    message.textContent = "";
+                    refreshDutiesList();
+                    refreshDutyViews();
+                  });
+                });
+              }, "my-duty-primary");
+              const cancel = actionButton("Cancel", "Cancel", () => {
+                message.textContent = "";
+                refreshDutiesList();
+              });
+              const edit = document.createElement("div");
+              edit.className = "my-duty-edit";
+              const line = document.createElement("div");
+              line.className = "my-duty-add-row";
+              line.append(daySel, periodSel);
+              const actions = document.createElement("div");
+              actions.className = "my-duty-edit-actions";
+              actions.append(save, cancel);
+              edit.append(line, input, actions);
+              row.appendChild(edit);
+              input.focus();
+            }
+
+            showButtons();
             dutiesList.appendChild(row);
           });
       });
@@ -3449,21 +3835,44 @@
 
     addButton.addEventListener("click", () => {
       const label = labelInput.value.trim();
-      if (!label) return;
+      const days = dayButtons
+        .filter((b) => b.getAttribute("aria-pressed") === "true")
+        .map((b) => Number(b.dataset.day));
+      if (!days.length) {
+        message.textContent = "Pick at least one day.";
+        return;
+      }
+      if (!label) {
+        message.textContent = "Give the duty a name.";
+        return;
+      }
 
-      const duty = {
-        id: `duty-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        day: Number(daySelect.value),
-        code: periodSelect.value,
-        label,
-      };
-
-      chrome.storage.sync.get({ myDuties: [] }, (res) => {
-        const updated = res.myDuties.concat(duty);
-        chrome.storage.sync.set({ myDuties: updated }, () => {
+      loadDuties((current) => {
+        const have = new Set(current.map((d) => dutyKey(d.day, d.code, d.label)));
+        const fresh = days.filter((day) => !have.has(dutyKey(day, periodSelect.value, label)));
+        if (!fresh.length) {
+          message.textContent = "You already have that duty.";
+          return;
+        }
+        const added = fresh.map((day) => ({
+          id: `duty-${Date.now()}-${day}-${Math.random().toString(36).slice(2, 7)}`,
+          day,
+          code: periodSelect.value,
+          label,
+        }));
+        saveDuties(current.concat(added), (ok) => {
+          if (!ok) {
+            message.textContent = "Couldn't save. Chrome storage is unavailable.";
+            return;
+          }
+          message.textContent =
+            fresh.length < days.length
+              ? "Added " + fresh.length + ". Skipped " + (days.length - fresh.length) + " you already had."
+              : "";
           labelInput.value = "";
+          dayButtons.forEach((b) => b.setAttribute("aria-pressed", "false"));
           refreshDutiesList();
-          addMyDutiesToTimetable();
+          refreshDutyViews();
         });
       });
     });
@@ -3474,6 +3883,13 @@
       dutiesChevron.classList.toggle("my-nav-chevron--open", isHidden);
       if (isHidden) refreshDutiesList();
     });
+  }
+
+  function dutySessionOrder(code) {
+    const slot = dutySessionSlot(code);
+    if (slot >= 0) return slot * 2 + 1;
+    const gap = DUTY_GAP_PERIODS.find((g) => g.code === code);
+    return gap ? gap.afterSlot * 2 + 2 : 99;
   }
 
   // Shared by both course-import date helpers below. Sets a Schoolbox

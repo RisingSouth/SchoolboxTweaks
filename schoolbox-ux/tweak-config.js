@@ -188,6 +188,21 @@ const TWEAK_GROUPS = [
     ],
   },
   {
+    name: "Timetable page",
+    tweaks: [
+      {
+        id: "timetablePageClassButtons",
+        label: "Class buttons on the Timetable page",
+        description: "Class List, Markbook and Go to class icons on each lesson (hover or Tab to a lesson to show them)",
+      },
+      {
+        id: "timetablePageDuties",
+        label: "My duties on the Timetable page",
+        description: "Shows your weekly duties (added in the My duties panel) on the Timetable page's week and day views",
+      },
+    ],
+  },
+  {
     name: "Pastoral records",
     tweaks: [
       {

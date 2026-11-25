@@ -1,8 +1,10 @@
-# Pastoral note entry
+# Schoolbox UX Tweaks
 
-How Carey staff write pastoral records in Schoolbox, and how the extension helps them reuse notes.
+The words used for the things Carey staff see in Schoolbox, and for what this extension adds to them.
 
 ## Language
+
+### Pastoral notes
 
 **Template**:
 A teacher's own saved copy of a pastoral note they can apply to any student. Private to that teacher.
@@ -15,3 +17,21 @@ _Avoid_: Default template, Schoolbox template
 **Student token**:
 A placeholder in a note, such as First name, that Schoolbox swaps for the student's details when the record is saved.
 _Avoid_: Merge field, variable
+
+### Timetable
+
+**Class**:
+One teaching group, with its own numeric ID (for example 5960). Has a Class List, a Markbook and a Class page.
+_Avoid_: Subject, group
+
+**Course**:
+The year-level homepage a Class sits under (for example Year 7 Computing Course). Not the same page as a Class page.
+_Avoid_: Class
+
+**Class page**:
+A Class's own Schoolbox homepage. The "Go to class" button opens it.
+_Avoid_: Class home, course page
+
+**Duty**:
+A teacher-defined weekly commitment, such as gate or yard duty, tied to a weekday and a period. Repeats every week until deleted.
+_Avoid_: Task, supervision
