@@ -24,6 +24,11 @@ const TWEAK_GROUPS = [
         label: "Relief check",
         description: "\"Check relief\" button on the dashboard timetable: opens Edval in a background tab on click, reads this week's relief, then closes it",
       },
+      {
+        id: "dashboardTimetableChanges",
+        label: "Cancelled lessons and room changes",
+        description: "Marks cancelled lessons and room swaps on the dashboard timetable, from the last \"Check relief\" result",
+      },
     ],
   },
   {

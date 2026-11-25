@@ -51,6 +51,7 @@
     if (tweakToggles.classListGmailCompose) addGmailComposeToClassListModal();
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
     if (tweakToggles.dashboardRelief) addReliefCheckToDashboard();
+    if (tweakToggles.dashboardTimetableChanges) addTimetableChangesToStrip();
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
     if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
     if (tweakToggles.pastoralRecordHistoryPanel) addPastoralRecordHistoryPanel();
@@ -2747,7 +2748,13 @@
   function findColumnIndexesForPeriodCode(table, periodCode) {
     const startTime = PERIOD_START_TIMES[periodCode];
     if (!startTime) return [];
+    return findColumnIndexesForStartTime(table, startTime);
+  }
 
+  // Same lookup by a start time directly (e.g. "8:45am"), for callers
+  // that already have one - the Edval cancelled/room-change marking
+  // reads a lesson's real start time and doesn't go via a period code.
+  function findColumnIndexesForStartTime(table, startTime) {
     const headerCells = Array.from(table.querySelectorAll("thead th"));
     const indexes = [];
     headerCells.forEach((th, index) => {
@@ -3132,6 +3139,7 @@
         if (response.ok) {
           message.textContent = "";
           renderReliefResult(box, response.data);
+          setTimetableChanges(response.data);
         } else if (response.error === "login") {
           // "Edval isn't signed in. Click here to sign in, then try
           // again." - built with DOM nodes, link opens Edval in a tab.
@@ -3152,6 +3160,137 @@
           message.textContent = "Couldn't check relief - try again.";
         }
       });
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // Dashboard timetable strip: cancelled lessons and room changes
+  //
+  // The relief check also reads Edval's cancelled lessons and room
+  // swaps for today (see edval-scrape.js, `changes`). Those are marked
+  // right on the matching timetable box: a red "Cancelled" banner, or
+  // a blue "MU.9 -> K.4" banner. Non-destructive, like My duties - the
+  // box's own content stays, only a class and a banner are added.
+  //
+  // Nothing is fetched here. The data is whatever the last "Check
+  // relief" click saved (chrome.storage.local, today only); the banner
+  // tooltip says when that was. A box is matched by class code AND the
+  // lesson's start time, because the same class (e.g. a Homeroom) can
+  // appear twice in one day and only one of them may be affected.
+  // Re-run from applyTweaks() on every DOM change, so it only touches
+  // the page when a box's state actually differs.
+  // ---------------------------------------------------------------
+  let timetableChangesData = null;
+  let timetableChangesLoaded = false;
+
+  function addTimetableChangesToStrip() {
+    if (!isDashboardPage()) return;
+    if (!timetableChangesLoaded) {
+      timetableChangesLoaded = true;
+      chrome.storage.local.get({ reliefResult: null }, (stored) => {
+        setTimetableChanges(stored.reliefResult);
+      });
+      return;
+    }
+    renderTimetableChanges();
+  }
+
+  // Called with a saved or fresh relief result. Anything not from
+  // today is ignored, so a stale banner can never show.
+  function setTimetableChanges(data) {
+    timetableChangesLoaded = true;
+    timetableChangesData =
+      data && data.forDate === localIsoDate(new Date()) ? data : null;
+    renderTimetableChanges();
+  }
+
+  // A box's class code is the first plain child <div>; ignore the
+  // elements this extension adds to the same box.
+  function timetableBoxCode(box) {
+    const codeEl = Array.from(box.querySelectorAll(":scope > div")).find(
+      (el) =>
+        !el.classList.contains("my-added-links") &&
+        !el.classList.contains("my-duty-banner") &&
+        !el.classList.contains("my-change-banner")
+    );
+    return codeEl ? normaliseClassCode(codeEl.textContent) : "";
+  }
+
+  function timetableChangeKey(change) {
+    return `${change.kind}|${change.oldRoom || ""}|${change.newRoom || ""}`;
+  }
+
+  function clearTimetableChange(box) {
+    box.querySelectorAll(":scope > .my-change-banner").forEach((el) => el.remove());
+    box.classList.remove("my-change-cancelled", "my-change-room");
+    delete box.dataset.myChange;
+  }
+
+  function applyTimetableChange(box, change, checkedLabel) {
+    box.dataset.myChange = timetableChangeKey(change);
+    box.classList.add(
+      change.kind === "cancelled" ? "my-change-cancelled" : "my-change-room"
+    );
+
+    const banner = document.createElement("div");
+    banner.className = "my-change-banner";
+    banner.title = `Edval, checked ${checkedLabel}`;
+    if (change.kind === "cancelled") {
+      banner.textContent = "Cancelled";
+    } else {
+      const oldRoom = document.createElement("s");
+      oldRoom.textContent = change.oldRoom;
+      banner.append(oldRoom, document.createTextNode(` \u2192 ${change.newRoom}`));
+    }
+    box.appendChild(banner);
+  }
+
+  function renderTimetableChanges() {
+    const table = getDesktopTimetableTable();
+    if (!table) return;
+
+    const data = timetableChangesData;
+    const changes = (data && data.changes) || [];
+    const checkedLabel = data ? reliefTimeLabel(data.checkedAt) : "";
+    const row = table.querySelector("tbody tr");
+
+    // box -> the change that applies to it
+    const wanted = new Map();
+    if (row) {
+      changes.forEach((change) => {
+        const code = normaliseClassCode(change.classCode);
+        const sameCode = Array.from(table.querySelectorAll(".timetable-subject")).filter(
+          (box) => timetableBoxCode(box) === code
+        );
+
+        const inColumn = [];
+        findColumnIndexesForStartTime(table, reliefTimeLabel(change.from)).forEach(
+          (index) => {
+            const cell = row.children[index];
+            if (!cell) return;
+            sameCode.forEach((box) => {
+              if (cell.contains(box)) inColumn.push(box);
+            });
+          }
+        );
+
+        // No column found for that start time (header format changed,
+        // say): fall back to the class code, but only when it is
+        // unambiguous - never guess between two boxes.
+        const matches = inColumn.length ? inColumn : sameCode.length === 1 ? sameCode : [];
+        matches.forEach((box) => wanted.set(box, change));
+      });
+    }
+
+    table.querySelectorAll(".timetable-subject[data-my-change]").forEach((box) => {
+      const change = wanted.get(box);
+      if (!change || box.dataset.myChange !== timetableChangeKey(change)) {
+        clearTimetableChange(box);
+      }
+    });
+    wanted.forEach((change, box) => {
+      if (box.dataset.myChange) return;
+      applyTimetableChange(box, change, checkedLabel);
     });
   }
 

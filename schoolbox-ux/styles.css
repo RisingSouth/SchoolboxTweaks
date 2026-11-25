@@ -863,6 +863,51 @@ td[data-pop-out-menu="true"]:hover .my-mb-quicklink--cell,
   Duty banner on an existing session column - teal, the extension's
   own accent colour, so it doesn't read as an urgent alert.
 */
+/* Cancelled lessons and room changes marked on the dashboard timetable
+   (see addTimetableChangesToStrip). The tint is an inset shadow so it
+   sits over whatever colour the box already has. */
+.timetable-subject.my-change-cancelled {
+  box-shadow: inset 0 0 0 999px rgba(214, 48, 49, 0.12);
+}
+
+.timetable-subject.my-change-cancelled > *:not(.my-change-banner):not(.my-added-links) {
+  text-decoration: line-through;
+}
+
+.timetable-subject.my-change-room {
+  box-shadow: inset 0 0 0 999px rgba(55, 138, 221, 0.14);
+}
+
+.timetable-subject.my-change-cancelled .my-added-links {
+  display: none;
+}
+
+.my-change-banner {
+  display: block;
+  width: fit-content;
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 4px;
+  padding: 2px 4px;
+  border-left: 3px solid;
+  background: #fff;
+}
+
+.my-change-cancelled .my-change-banner {
+  color: #a32d2d;
+  border-color: #d63031;
+}
+
+.my-change-room .my-change-banner {
+  color: #185fa5;
+  border-color: #378add;
+}
+
+.my-change-banner s {
+  font-weight: 400;
+  color: #666;
+}
+
 .my-duty-banner {
   font-size: 10px;
   font-weight: 600;

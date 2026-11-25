@@ -16,6 +16,13 @@
 //    whose lesson I'm taking (Edval's tooltip: "Covering for X").
 //  - Lesson COVERED by someone else: data-usual-teacher="true" with a
 //    covering code ("Covered by X").
+//  - CANCELLED lesson: data-cancelled="true" (Edval shows a red X).
+//  - ROOM CHANGE: data-old-room-code is the usual room and
+//    data-room-code is a different, non-empty room. A cancelled lesson
+//    can also lose its room (old set, room empty) - that is a
+//    cancellation, not a room change.
+// Cancellations and room changes are returned separately, as `changes`,
+// because the dashboard marks those on the timetable strip itself.
 (function () {
   let skeletonFirstSeen = 0;
 
@@ -32,6 +39,30 @@
       }
     });
     return names;
+  }
+
+  // Cancelled lessons and room changes, for real lessons only (not
+  // events, not teacher-absence placeholders). Homeroom is deliberately
+  // included.
+  function classifyChange(d) {
+    if (d.event === "true" || !d.classCode || d.teacherAbsence === "true") {
+      return null;
+    }
+    const base = {
+      date: d.date,
+      from: Number(d.from),
+      to: Number(d.to),
+      periodKey: d.periodKey,
+      classCode: d.classCode,
+      subject: d.classSubject,
+    };
+    if (d.cancelled === "true") {
+      return { ...base, kind: "cancelled", room: d.roomCode || d.oldRoomCode || "" };
+    }
+    if (d.oldRoomCode && d.roomCode && d.roomCode !== d.oldRoomCode) {
+      return { ...base, kind: "room", oldRoom: d.oldRoomCode, newRoom: d.roomCode };
+    }
+    return null;
   }
 
   function scrape() {
@@ -64,8 +95,11 @@
 
     const names = readNameMap();
     const items = [];
+    const changes = [];
     todaysEvents.forEach((el) => {
       const d = el.dataset;
+      const change = classifyChange(d);
+      if (change) changes.push(change);
       if (d.event === "true" || !d.classCode || !d.coveringTeacherCode) return;
       if (d.teacherAbsence === "true") return;
       items.push({
@@ -86,6 +120,7 @@
       status: "ok",
       forDate: todayIso,
       items,
+      changes,
       lessonCount: todaysEvents.length,
     };
   }

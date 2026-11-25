@@ -154,6 +154,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             checkedAt: Date.now(),
             forDate: result.forDate,
             items: result.items,
+            changes: result.changes || [],
             lessonCount: result.lessonCount,
           };
           await chrome.storage.local.set({ reliefResult: data });
