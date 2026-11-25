@@ -150,12 +150,6 @@ const TWEAK_GROUPS = [
         label: "Open students in Gmail",
         description: "Adds an \"Open students in Gmail\" button to the Compose Email dialog (students only, in BCC)",
       },
-      {
-        id: "classListStudentActions",
-        since: "1.2.11",
-        label: "Add record and Attendance on each student",
-        description: "Hover a student's row for Add pastoral record and Attendance (Veracross) buttons beside their name",
-      },
     ],
   },
   {
@@ -276,10 +270,6 @@ const CHANGELOG = [
       {
         title: "Class buttons on the Timetable page",
         text: "Hover (or Tab to) a lesson on the Timetable page for Class List, Markbook and Go to class. Clicking a lesson also adds a Course page button to its pop-up. Turn it off in the Timetable page group.",
-      },
-      {
-        title: "Add record and Attendance on the Class List",
-        text: "Hover a student's row on a Class List for Add pastoral record and Attendance (Veracross) buttons beside their name. Turn it off in the Class List group.",
       },
       {
         title: "My duties on the Timetable page",
