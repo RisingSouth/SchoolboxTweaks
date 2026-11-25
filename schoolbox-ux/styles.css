@@ -2458,3 +2458,9 @@ a.fc-timegrid-event.fc-timegrid-event-short .my-tt-links { top: 100%; }
 .my-duty-add-button { font-size: 13px; min-height: 44px; }
 .my-duty-msg { font-size: 12px; color: #c62828; }
 .my-duty-msg:empty { display: none; }
+
+/* Course page icon: smaller, used less */
+.my-added-link.my-added-link--course { opacity: 0.8; }
+.my-added-link--course svg { width: 12px; height: 12px; }
+a.fc-timegrid-event .my-added-link.my-added-link--course { height: 18px; min-width: 18px; }
+.my-added-link[hidden] { display: none; }

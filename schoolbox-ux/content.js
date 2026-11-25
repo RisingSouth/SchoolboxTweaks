@@ -1716,8 +1716,80 @@
         "M10 20v-6h4v6",
       ])
     );
+    // Course page: smaller, hidden until we know the class has one.
+    const course = makeIconLink("#", "Course page", [
+      "M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z",
+      "M4 21V5",
+      "M9 7h6",
+    ]);
+    course.classList.add("my-added-link--course");
+    course.hidden = true;
+    course.dataset.classId = classId;
+    wrapper.appendChild(course);
+    wrapper.dataset.classId = classId;
     return wrapper;
   }
+
+  // A class's course page isn't linked from the timetable. It is linked
+  // from the class's own page (/homepage/{id}, "Visit course page"), so
+  // on first hover/focus we read that page once and remember the answer.
+  // Classes without one (Homeroom) simply never show the icon.
+  const COURSE_CACHE_KEY = "myClassCourseLinks";
+  const courseLookups = new Map();
+
+  function readCourseCache() {
+    try {
+      return JSON.parse(localStorage.getItem(COURSE_CACHE_KEY) || "{}");
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function lookUpCourseHref(classId) {
+    const cached = readCourseCache()[classId];
+    if (cached !== undefined) return Promise.resolve(cached);
+    if (courseLookups.has(classId)) return courseLookups.get(classId);
+    const p = fetch(`/homepage/${classId}`, { credentials: "same-origin" })
+      .then((res) => (res.ok ? res.text() : Promise.reject(new Error("status"))))
+      .then((html) => {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const a = doc.querySelector('a[title="Visit course page"][href^="/homepage/"]');
+        const href = a ? a.getAttribute("href") : "";
+        try {
+          const cache = readCourseCache();
+          cache[classId] = href;
+          localStorage.setItem(COURSE_CACHE_KEY, JSON.stringify(cache));
+        } catch (e) {}
+        return href;
+      })
+      .catch(() => null)
+      .finally(() => courseLookups.delete(classId));
+    courseLookups.set(classId, p);
+    return p;
+  }
+
+  function revealCourseIcon(wrapper) {
+    const icon = wrapper.querySelector(".my-added-link--course[hidden]");
+    if (!icon || icon.dataset.looking) return;
+    icon.dataset.looking = "1";
+    lookUpCourseHref(icon.dataset.classId).then((href) => {
+      delete icon.dataset.looking;
+      if (!href) return;
+      icon.href = href;
+      icon.hidden = false;
+    });
+  }
+
+  document.addEventListener("mouseover", (e) => {
+    const box = e.target.closest && e.target.closest(".timetable-subject, a.fc-timegrid-event");
+    const w = box && box.querySelector(".my-added-links");
+    if (w) revealCourseIcon(w);
+  });
+  document.addEventListener("focusin", (e) => {
+    const box = e.target.closest && e.target.closest(".timetable-subject, a.fc-timegrid-event");
+    const w = box && box.querySelector(".my-added-links");
+    if (w) revealCourseIcon(w);
+  });
 
   function addClassListAndMarkbookLinks() {
     if (!isDashboardPage()) return;
