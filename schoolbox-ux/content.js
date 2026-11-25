@@ -380,6 +380,8 @@
       if (!panel.isConnected) {
         window.removeEventListener("resize", place);
         window.removeEventListener("scroll", place, true);
+        document.removeEventListener("mousedown", onOutside, true);
+        document.removeEventListener("keydown", onKey, true);
         clearInterval(timer);
         return;
       }
@@ -388,6 +390,20 @@
       panel.style.top = `${rect.bottom + 4}px`;
       panel.style.right = `${Math.max(4, window.innerWidth - rect.right)}px`;
     };
+    // Click anywhere else (or Escape) closes it. Clicks on the button
+    // itself are left to its own toggle so it doesn't close and reopen.
+    const onOutside = (e) => {
+      if (panel.contains(e.target) || li.contains(e.target)) return;
+      panel.remove();
+      place();
+    };
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      panel.remove();
+      place();
+    };
+    document.addEventListener("mousedown", onOutside, true);
+    document.addEventListener("keydown", onKey, true);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
     // Catches reflows that fire no event (menu docking, nav animations).
