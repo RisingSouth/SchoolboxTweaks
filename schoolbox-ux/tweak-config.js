@@ -305,6 +305,10 @@ const CHANGELOG = [
         text: "A private list of who each Schoolbox email was sent to, so you can check later who was contacted. Kept only in your browser for 100 days (with its subject and the first 10 words of the message); search, export or delete it at the bottom of this page. Turn it off in the Webmail group.",
       },
       {
+        title: "Backup and restore",
+        text: "New computer? Export your settings, duties, pastoral note templates and sent mail record to a file at the bottom of the settings page, then import it on the new one.",
+      },
+      {
         title: "My duties on the Timetable page",
         text: "Your duties now show on the Timetable week and day views, including before and after school. The My duties panel is easier to use: pick several days at once, edit a duty in place, and confirm before deleting.",
       },

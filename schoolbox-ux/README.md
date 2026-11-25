@@ -52,3 +52,7 @@ Each has its own toggle under "Timetable page" in the settings.
 When you send an email from Schoolbox Webmail, the extension notes the subject, time, the To/CC/BCC recipients and the first 10 words of the message (never the full body). It's saved only in this browser (`chrome.storage.local`, not synced) and deleted automatically after 100 days. View, search, export (CSV) or delete it at the bottom of the extension settings page. Turn it off in the Webmail group.
 
 Limits: sends to a class or group address record that address, not its members; emails sent from Gmail (including "Open students in Gmail") aren't recorded; a send is only recorded once the next page loads without the compose form.
+
+## Backup and restore
+
+The settings page can export settings, duties, pastoral note templates and the sent mail record to a JSON file, and import it again on another computer. Import overwrites matching settings/duties/templates and merges sent mail entries (by id, then the 100-day prune). The file contains recipient names and addresses, so treat it as private. Caches (course links, relief results) aren't included.

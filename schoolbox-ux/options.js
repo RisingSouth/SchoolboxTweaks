@@ -484,6 +484,125 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+
+  // Backup: export everything the extension keeps (settings, duties,
+  // pastoral templates and the sent mail record) to one JSON file, and
+  // import it on another computer. Transient caches are left out.
+  const backupSection = document.getElementById("backup");
+  const BACKUP_APP = "schoolbox-ux-tweaks";
+  const BACKUP_SKIP_SYNC = ["lastSeenVersion"];
+  const backupMessage = document.createElement("p");
+  backupMessage.className = "sent-empty";
+  backupMessage.setAttribute("role", "status");
+
+  function renderBackup() {
+    backupSection.textContent = "";
+    const heading = document.createElement("h2");
+    heading.textContent = "Backup and restore";
+    backupSection.appendChild(heading);
+    const desc = document.createElement("p");
+    desc.className = "tweak-desc";
+    desc.textContent =
+      "Moving to a new computer? Export saves your settings, duties, pastoral note templates and sent mail record to a file; import restores them. The file includes recipient names and email addresses from the sent mail record, so keep it somewhere private.";
+    backupSection.appendChild(desc);
+
+    const bar = document.createElement("div");
+    bar.className = "sent-toolbar";
+    const exportBtn = document.createElement("button");
+    exportBtn.type = "button";
+    exportBtn.textContent = "Export data";
+    exportBtn.addEventListener("click", exportBackup);
+    const importBtn = document.createElement("button");
+    importBtn.type = "button";
+    importBtn.textContent = "Import data";
+    const file = document.createElement("input");
+    file.type = "file";
+    file.accept = ".json,application/json";
+    file.hidden = true;
+    importBtn.addEventListener("click", () => file.click());
+    file.addEventListener("change", () => {
+      if (file.files[0]) importBackup(file.files[0]);
+      file.value = "";
+    });
+    bar.appendChild(exportBtn);
+    bar.appendChild(importBtn);
+    bar.appendChild(file);
+    backupSection.appendChild(bar);
+    backupSection.appendChild(backupMessage);
+  }
+
+  function exportBackup() {
+    chrome.storage.sync.get(null, (sync) => {
+      BACKUP_SKIP_SYNC.forEach((k) => delete sync[k]);
+      chrome.storage.local.get({ [SENT_MAIL_KEY]: [] }, (local) => {
+        const data = {
+          app: BACKUP_APP,
+          version: chrome.runtime.getManifest().version,
+          exported: new Date().toISOString(),
+          sync,
+          local: { [SENT_MAIL_KEY]: pruneSentMailLog(local[SENT_MAIL_KEY]) },
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "schoolbox-tweaks-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        backupMessage.textContent = "Exported.";
+      });
+    });
+  }
+
+  function importBackup(file) {
+    file.text().then((text) => {
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        backupMessage.textContent = "That file isn't a valid backup.";
+        return;
+      }
+      if (!data || data.app !== BACKUP_APP || typeof data.sync !== "object" || !data.sync) {
+        backupMessage.textContent = "That file isn't a Schoolbox UX Tweaks backup.";
+        return;
+      }
+      const sync = Object.assign({}, data.sync);
+      BACKUP_SKIP_SYNC.forEach((k) => delete sync[k]);
+      const incoming = Array.isArray(data.local && data.local[SENT_MAIL_KEY])
+        ? data.local[SENT_MAIL_KEY]
+        : [];
+      if (!window.confirm(
+        "Import this backup? Settings, duties and templates in the file will replace the matching ones here. Sent mail entries are added to the current record."
+      )) return;
+
+      chrome.storage.sync.set(sync, () => {
+        if (chrome.runtime.lastError) {
+          backupMessage.textContent = "Import failed: " + chrome.runtime.lastError.message;
+          return;
+        }
+        chrome.storage.local.get({ [SENT_MAIL_KEY]: [] }, (stored) => {
+          const seen = new Set();
+          const merged = pruneSentMailLog(
+            (stored[SENT_MAIL_KEY] || []).concat(incoming).filter((e) => {
+              if (!e || seen.has(e.id)) return false;
+              seen.add(e.id);
+              return true;
+            })
+          );
+          chrome.storage.local.set({ [SENT_MAIL_KEY]: merged }, () => {
+            backupMessage.textContent = "Imported. Reloading…";
+            chrome.tabs.query({ url: "https://my.careywa.au/*" }, (tabs) => {
+              tabs.forEach((tab) => chrome.tabs.reload(tab.id));
+              setTimeout(() => location.reload(), 300);
+            });
+          });
+        });
+      });
+    });
+  }
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes[SENT_MAIL_KEY]) loadSentMail();
   });
@@ -501,6 +620,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderGroups();
       renderGradeScales();
       loadSentMail();
+      renderBackup();
       applyMasterDisabledState();
     }
   );
