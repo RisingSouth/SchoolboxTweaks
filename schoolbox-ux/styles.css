@@ -864,48 +864,66 @@ td[data-pop-out-menu="true"]:hover .my-mb-quicklink--cell,
   own accent colour, so it doesn't read as an urgent alert.
 */
 /* Cancelled lessons and room changes marked on the dashboard timetable
-   (see addTimetableChangesToStrip). The tint is an inset shadow so it
-   sits over whatever colour the box already has. */
-.timetable-subject.my-change-cancelled {
-  box-shadow: inset 0 0 0 999px rgba(214, 48, 49, 0.12);
+   (see addTimetableChangesToStrip). The badge is absolutely positioned
+   in the box's bottom-right corner: always inside the box (can't be
+   clipped by its height) and clear of the title and the Class List /
+   Markbook icons, which stay usable. A cancelled box is washed out and
+   struck through; a room change gets a blue outline. */
+.timetable-subject.my-change-cancelled,
+.timetable-subject.my-change-room {
+  position: relative;
 }
 
-.timetable-subject.my-change-cancelled > *:not(.my-change-banner):not(.my-added-links) {
+.timetable-subject.my-change-cancelled {
   text-decoration: line-through;
 }
 
-.timetable-subject.my-change-room {
-  box-shadow: inset 0 0 0 999px rgba(55, 138, 221, 0.14);
+.timetable-subject.my-change-cancelled::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(245, 245, 245, 0.6);
+  pointer-events: none;
+  z-index: 1;
 }
 
-.timetable-subject.my-change-cancelled .my-added-links {
-  display: none;
+.timetable-subject.my-change-room {
+  box-shadow: inset 0 0 0 2px #378add;
+}
+
+.timetable-subject.my-change-cancelled .my-added-links,
+.timetable-subject.my-change-room .my-added-links {
+  z-index: 2;
 }
 
 .my-change-banner {
-  display: block;
-  width: fit-content;
-  font-size: 10px;
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 2;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  font-size: 12px;
   font-weight: 600;
-  margin-top: 4px;
-  padding: 2px 4px;
-  border-left: 3px solid;
-  background: #fff;
+  line-height: 26px;
+  text-decoration: none;
+  color: #fff;
+  white-space: nowrap;
 }
 
 .my-change-cancelled .my-change-banner {
-  color: #a32d2d;
-  border-color: #d63031;
+  background: #c62828;
 }
 
 .my-change-room .my-change-banner {
-  color: #185fa5;
-  border-color: #378add;
+  background: #1e6fc2;
 }
 
 .my-change-banner s {
   font-weight: 400;
-  color: #666;
+  opacity: 0.8;
+  margin-right: 4px;
 }
 
 .my-duty-banner {
@@ -1708,6 +1726,11 @@ body.my-tweak-course-list .my-cl-reset {
 .my-relief__item--covering {
   border-left-color: #c77700;
   background: #fff6e5;
+}
+
+.my-relief__item--event {
+  border-left-color: #888;
+  background: #f4f4f4;
 }
 
 .my-relief__item--today {

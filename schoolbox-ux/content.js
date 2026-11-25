@@ -3057,15 +3057,26 @@
     status.className = "my-relief__status";
     const relief = items.filter((i) => i.kind === "covering").length;
     const covered = items.filter((i) => i.kind === "covered").length;
+    const events = items.filter((i) => i.kind === "event").length;
     const parts = [];
     parts.push(relief ? `${relief} relief lesson${relief === 1 ? "" : "s"}` : "No relief");
     if (covered) parts.push(`${covered} of your lessons covered`);
+    if (events) parts.push(`${events} event${events === 1 ? "" : "s"}`);
     status.textContent = `${parts.join(" · ")} today (checked ${reliefTimeLabel(data.checkedAt)})`;
     out.appendChild(status);
 
     items.forEach((item) => {
       const row = document.createElement("div");
       row.className = `my-relief__item my-relief__item--${item.kind}`;
+
+      if (item.kind === "event") {
+        const eventRoom = item.room ? ` · ${item.room}` : "";
+        row.textContent =
+          `${reliefTimeLabel(item.from)}–${reliefTimeLabel(item.to)} · ` +
+          `${item.subject}${eventRoom}`;
+        out.appendChild(row);
+        return;
+      }
 
       const other = item.otherName || item.otherCode;
       const verb = item.kind === "covering" ? "covering for" : "covered by";
@@ -3240,7 +3251,11 @@
     } else {
       const oldRoom = document.createElement("s");
       oldRoom.textContent = change.oldRoom;
-      banner.append(oldRoom, document.createTextNode(` \u2192 ${change.newRoom}`));
+      banner.append(
+        document.createTextNode("Room "),
+        oldRoom,
+        document.createTextNode(` \u2192 ${change.newRoom}`)
+      );
     }
     box.appendChild(banner);
   }

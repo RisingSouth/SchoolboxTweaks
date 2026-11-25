@@ -16,6 +16,7 @@
 //    whose lesson I'm taking (Edval's tooltip: "Covering for X").
 //  - Lesson COVERED by someone else: data-usual-teacher="true" with a
 //    covering code ("Covered by X").
+//  - EVENT (data-event="true"): listed as kind "event", no class/cover.
 //  - CANCELLED lesson: data-cancelled="true" (Edval shows a red X).
 //  - ROOM CHANGE: data-old-room-code is the usual room and
 //    data-room-code is a different, non-empty room. A cancelled lesson
@@ -96,8 +97,33 @@
     const names = readNameMap();
     const items = [];
     const changes = [];
+    const seenEvents = new Set();
     todaysEvents.forEach((el) => {
       const d = el.dataset;
+
+      // Events on my timetable (supervision, meetings, duties) have no
+      // class or covering teacher; they're listed as-is.
+      if (d.event === "true" && d.teacherAbsence !== "true") {
+        const subject = d.activity || d.classSubject || "Event";
+        const key = `${d.from}|${d.to}|${subject}`;
+        if (!seenEvents.has(key)) {
+          seenEvents.add(key);
+          items.push({
+            kind: "event",
+            date: d.date,
+            from: Number(d.from),
+            to: Number(d.to),
+            periodKey: d.periodKey,
+            classCode: "",
+            subject,
+            room: d.roomCode || "",
+            otherCode: "",
+            otherName: "",
+          });
+        }
+        return;
+      }
+
       const change = classifyChange(d);
       if (change) changes.push(change);
       if (d.event === "true" || !d.classCode || !d.coveringTeacherCode) return;
