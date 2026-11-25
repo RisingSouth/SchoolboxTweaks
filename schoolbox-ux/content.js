@@ -49,6 +49,7 @@
     if (tweakToggles.classListStudentCount) updateClassListStudentCount();
     if (tweakToggles.classListExportCsv) addClassListCsvExport();
     if (tweakToggles.classListGmailCompose) addGmailComposeToClassListModal();
+    if (tweakToggles.classListStudentActions) addStudentActionsToClassList();
     if (tweakToggles.dashboardDuties) addMyDutiesToTimetable();
     if (tweakToggles.timetablePageClassButtons) {
       addTimetablePageClassButtons();
@@ -2663,6 +2664,88 @@
       });
   }
 
+  // Class List page: the same two shortcuts used after a search that a
+  // teacher reaches for most - Add pastoral record and Attendance
+  // (Veracross) - on each student's row. They sit beside the student's
+  // name and only show when the row is hovered or focused (always
+  // visible on touch screens). Built from the student id already on the
+  // row (pastoral-flags-{id}), so no extra request is made until
+  // Attendance is clicked.
+  function addStudentActionsToClassList() {
+    if (!isClassListPage()) return;
+
+    document
+      .querySelectorAll('div[data-test^="pastoral-flags-"]')
+      .forEach((flagRow) => {
+        const idMatch = (flagRow.dataset.test || "").match(/^pastoral-flags-(\d+)$/);
+        if (!idMatch) return;
+        const studentId = idMatch[1];
+
+        const studentRow = flagRow.closest("tr");
+        if (!studentRow || studentRow.classList.contains("sub-row")) return;
+
+        const existing = studentRow.querySelector(".my-class-actions");
+        if (existing && existing.dataset.studentId === studentId) return;
+        if (existing) existing.remove();
+
+        const nameLink = studentRow.querySelector('a[href^="/search/user/"]');
+        const name = nameLink ? nameLink.textContent.trim().replace(/\s+/g, " ") : "student";
+
+        // Beside the name: the first row of the name cell's column. Falls
+        // back to the name link's own parent if that structure changes.
+        const nameContainer = studentRow.querySelector(".u-flex-col.u-gap-s");
+        const host =
+          (nameContainer && nameContainer.firstElementChild) ||
+          (nameLink && nameLink.parentElement);
+        if (!host) return;
+
+        const makeIcon = (iconName) => {
+          const icon = document.createElement("sbx-icon");
+          icon.setAttribute("name", iconName);
+          icon.setAttribute("size", "1rem");
+          icon.setAttribute("color", "currentColor");
+          return icon;
+        };
+        const makeText = (text) => {
+          const span = document.createElement("span");
+          span.className = "my-search-action__text";
+          span.textContent = text;
+          return span;
+        };
+
+        const wrap = document.createElement("span");
+        wrap.className = "my-class-actions";
+        wrap.dataset.studentId = studentId;
+
+        const add = document.createElement("a");
+        add.className = "my-search-action";
+        add.href = `/pastoral/student/${studentId}/record/insert`;
+        add.title = `Add pastoral record - ${name}`;
+        add.setAttribute("aria-label", `Add pastoral record for ${name}`);
+        add.appendChild(makeIcon("add"));
+        add.appendChild(makeText("Add record"));
+        wrap.appendChild(add);
+
+        const attendance = document.createElement("button");
+        attendance.type = "button";
+        attendance.className = "my-search-action";
+        attendance.title = `Attendance today (Veracross) - ${name}`;
+        attendance.setAttribute("aria-label", `Attendance today in Veracross for ${name}`);
+        attendance.appendChild(makeIcon("clipboard"));
+        attendance.appendChild(makeText("Attendance"));
+        attendance.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openVeracrossAttendance(studentId, attendance, name);
+        });
+        wrap.appendChild(attendance);
+
+        // A click on these is theirs, not the row's.
+        wrap.addEventListener("click", (event) => event.stopPropagation());
+        host.appendChild(wrap);
+      });
+  }
+
   // The Class List table ships four columns that carry little
   // day-to-day value: Differentiation Profile, Year Level, and House
   // sit blank for nearly every student in this class, and Last
@@ -2690,22 +2773,24 @@
 
     const headers = Array.from(headerRow.children);
     const findIndex = (matcher) => headers.findIndex(matcher);
+    // Header text compared loosely (case, spacing, trailing sort marks).
+    const headerText = (th) => th.textContent.replace(/\s+/g, " ").trim().toLowerCase();
 
     const flagsColumnIndex = findIndex(
-      (th) => th.textContent.trim() === "Differentiation Profile"
+      (th) => headerText(th).startsWith("differentiation profile")
     );
     const hiddenColumnIndexes = [
       findIndex(
         (th) =>
           th.dataset.test === "class-list-year-level-column" ||
-          th.textContent.trim() === "Year Level"
+          headerText(th).startsWith("year level")
       ),
       findIndex(
         (th) =>
           th.dataset.test === "class-list-house-column" ||
-          th.textContent.trim() === "House"
+          headerText(th) === "house"
       ),
-      findIndex((th) => th.textContent.trim() === "Last Visited"),
+      findIndex((th) => headerText(th).startsWith("last visited")),
     ].filter((index) => index !== -1);
 
     if (flagsColumnIndex === -1 && !hiddenColumnIndexes.length) return;

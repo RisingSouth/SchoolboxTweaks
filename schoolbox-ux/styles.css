@@ -2458,3 +2458,22 @@ a.fc-timegrid-event.fc-timegrid-event-short .my-tt-links { top: 100%; }
 .my-duty-add-button { font-size: 13px; min-height: 44px; }
 .my-duty-msg { font-size: 12px; color: #c62828; }
 .my-duty-msg:empty { display: none; }
+
+/* Class List: per-student shortcuts, shown on row hover/focus */
+.my-class-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  vertical-align: middle;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+tr:hover .my-class-actions,
+tr:focus-within .my-class-actions,
+.my-class-actions:focus-within {
+  opacity: 1;
+}
+@media (hover: none) {
+  .my-class-actions { opacity: 1; }
+}
