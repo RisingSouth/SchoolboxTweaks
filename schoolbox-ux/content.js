@@ -367,7 +367,32 @@
       panel.appendChild(footer);
 
       document.body.appendChild(panel);
+      keepNavPanelPinned(panel, li);
     });
+  }
+
+  // The panel is position:fixed, so it has to be moved by hand whenever
+  // the button moves: window resize, scrolling, the left menu docking or
+  // the nav bar reflowing. Re-anchors on those, and when the panel opens
+  // too close to the screen edge it stays inside the viewport.
+  function keepNavPanelPinned(panel, li) {
+    const place = () => {
+      if (!panel.isConnected) {
+        window.removeEventListener("resize", place);
+        window.removeEventListener("scroll", place, true);
+        clearInterval(timer);
+        return;
+      }
+      const rect = li.getBoundingClientRect();
+      if (!rect.width && !rect.height) return; // button hidden by the nav
+      panel.style.top = `${rect.bottom + 4}px`;
+      panel.style.right = `${Math.max(4, window.innerWidth - rect.right)}px`;
+    };
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    // Catches reflows that fire no event (menu docking, nav animations).
+    const timer = setInterval(place, 250);
+    place();
   }
 
   // #filter_panel isn't unique to the Markbook - other report pages
