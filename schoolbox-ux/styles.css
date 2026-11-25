@@ -2288,3 +2288,69 @@ body.my-status-grid .my-grid-row input[name="mark"].my-grid-bad { border-color: 
   font-weight: 700;
   font-size: 0.9em;
 }
+
+/* Manage templates */
+.my-tpl-manage { font-weight: 400; color: #1f2933; }
+.my-tpl-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(21, 26, 33, 0.45);
+}
+.my-tpl-modal {
+  width: 560px;
+  max-width: 94vw;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 22px 24px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(21, 26, 33, 0.25);
+  font-family: inherit;
+}
+.my-tpl-modal h2 { margin: 0 0 12px; font-size: 1.25em; }
+.my-tpl-modal button,
+.my-tpl-modal input,
+.my-tpl-modal textarea { font-family: inherit; }
+.my-tpl-modal button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #c9cfd8;
+  border-radius: 4px;
+  background: #fff;
+  color: #1f2933;
+  cursor: pointer;
+}
+.my-tpl-modal button:hover { background: #eef5f8; }
+.my-tpl-modal .my-tpl-primary { background: rgb(21, 82, 107); border-color: rgb(21, 82, 107); color: #fff; }
+.my-tpl-modal .my-tpl-primary:hover { background: rgb(13, 58, 77); }
+.my-tpl-modal .my-tpl-danger { background: #c62828; border-color: #c62828; color: #fff; }
+.my-tpl-modal .my-tpl-danger:hover { background: #a21f1f; }
+.my-tpl-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 10px 0;
+  border-top: 1px solid #e2e5e9;
+}
+.my-tpl-row-info { flex: 1 1 220px; display: flex; flex-direction: column; min-width: 0; }
+.my-tpl-row-info span { font-size: 0.85em; color: #5e6672; }
+.my-tpl-row-info input { margin: 0; }
+.my-tpl-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.my-tpl-modal-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e5e9;
+}
+.my-tpl-textarea { flex: 1 1 100%; min-height: 130px; margin: 0; font-size: 0.85em; }
+.my-tpl-textarea[hidden], .my-tpl-modal [hidden] { display: none; }
+.my-tpl-modal .my-tpl-msg--info { color: #33404d; flex: 1 1 100%; }
+.my-tpl-close { margin-left: auto; }

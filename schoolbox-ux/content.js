@@ -4832,20 +4832,64 @@
   let tplRequestCounter = 0;
   let tplUndoSnapshot = null;
 
+  // One chrome.storage.sync key per Template ("pastoralTemplate:<id>"):
+  // sync allows 8KB per KEY (and ~100KB overall), so a single array of
+  // every template would hit 8KB after a few long notes. A Template
+  // bigger than TEMPLATE_MAX_BYTES is refused with a clear message.
+  const TEMPLATE_KEY_PREFIX = "pastoralTemplate:";
+  const TEMPLATE_MAX_BYTES = 7000;
+
+  // Reads every Template. Also moves any list saved by the first
+  // version (one array under "pastoralTemplates") to per-item keys.
   function loadPastoralTemplates(callback) {
     try {
-      chrome.storage.sync.get({ [TEMPLATES_STORAGE_KEY]: [] }, (result) => {
-        const list = result[TEMPLATES_STORAGE_KEY];
-        callback(Array.isArray(list) ? list : []);
+      chrome.storage.sync.get(null, (all) => {
+        const list = [];
+        Object.keys(all || {}).forEach((key) => {
+          if (key.indexOf(TEMPLATE_KEY_PREFIX) === 0 && all[key] && all[key].id) {
+            list.push(all[key]);
+          }
+        });
+        const legacy = all && all[TEMPLATES_STORAGE_KEY];
+        if (Array.isArray(legacy) && legacy.length) {
+          const moved = {};
+          legacy.forEach((t) => {
+            if (t && t.id && !list.some((x) => x.id === t.id)) {
+              moved[TEMPLATE_KEY_PREFIX + t.id] = t;
+              list.push(t);
+            }
+          });
+          chrome.storage.sync.set(moved, () => {
+            if (!chrome.runtime.lastError) {
+              chrome.storage.sync.remove(TEMPLATES_STORAGE_KEY);
+            }
+          });
+        }
+        callback(list);
       });
     } catch (err) {
       callback([]);
     }
   }
 
-  function storePastoralTemplates(list, callback) {
+  function templateTooBig(template) {
+    return JSON.stringify(template).length > TEMPLATE_MAX_BYTES;
+  }
+
+  // Saves (adds or replaces) one Template. callback(true | false).
+  function putPastoralTemplate(template, callback) {
     try {
-      chrome.storage.sync.set({ [TEMPLATES_STORAGE_KEY]: list }, () => {
+      chrome.storage.sync.set({ [TEMPLATE_KEY_PREFIX + template.id]: template }, () => {
+        callback(!chrome.runtime.lastError);
+      });
+    } catch (err) {
+      callback(false);
+    }
+  }
+
+  function removePastoralTemplate(id, callback) {
+    try {
+      chrome.storage.sync.remove(TEMPLATE_KEY_PREFIX + id, () => {
         callback(!chrome.runtime.lastError);
       });
     } catch (err) {
@@ -5019,7 +5063,7 @@
           const stored = list.find((t) => t.id === template.id);
           if (!stored) return;
           stored.lastUsed = Date.now();
-          storePastoralTemplates(list, () => {});
+          putPastoralTemplate(stored, () => {});
         });
       });
     });
@@ -5153,7 +5197,7 @@
         onDone("A template called “" + name.trim() + "” already exists.");
         return;
       }
-      list.push({
+      const template = {
         id: "t" + Date.now(),
         name: name.trim(),
         typeLabel: form.typeLabel,
@@ -5163,8 +5207,12 @@
         tags: form.tags,
         html: form.html,
         ts: Date.now(),
-      });
-      storePastoralTemplates(list, (ok) =>
+      };
+      if (templateTooBig(template)) {
+        onDone("This note is too long to keep as a template. Shorten it and try again.");
+        return;
+      }
+      putPastoralTemplate(template, (ok) =>
         onDone(ok ? null : "Couldn't save. Chrome storage is full or unavailable.")
       );
     });
@@ -5447,6 +5495,302 @@
     showChoices();
   }
 
+  // ---- Manage templates ---------------------------------------------
+  function cleanImportedHtml(html) {
+    const doc = new DOMParser().parseFromString(String(html), "text/html");
+    doc.querySelectorAll("script, style, iframe, object, embed, link, meta").forEach((n) => n.remove());
+    doc.body.querySelectorAll("*").forEach((el) => {
+      Array.from(el.attributes).forEach((attr) => {
+        if (/^on/i.test(attr.name) || /^\s*javascript:/i.test(attr.value)) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    });
+    return doc.body.innerHTML;
+  }
+
+  function exportTemplatesText(list) {
+    return JSON.stringify(
+      {
+        app: "schoolbox-ux-templates",
+        v: 1,
+        templates: list.map((t) => ({
+          name: t.name,
+          typeLabel: t.typeLabel,
+          subtypeLabel: t.subtypeLabel,
+          title: t.title,
+          points: t.points,
+          tags: t.tags,
+          html: t.html,
+        })),
+      },
+      null,
+      1
+    );
+  }
+
+  // Adds Templates from pasted export text. Skips ones whose name is
+  // already used, invalid ones, and anything past the cap.
+  // callback({added, skipped, error})
+  function importTemplatesText(text, callback) {
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      callback({ error: "That doesn't look like exported templates." });
+      return;
+    }
+    if (!data || data.app !== "schoolbox-ux-templates" || !Array.isArray(data.templates)) {
+      callback({ error: "That doesn't look like exported templates." });
+      return;
+    }
+    const str = (v, max) => (typeof v === "string" && v.length <= max ? v : null);
+    loadPastoralTemplates((existing) => {
+      const names = new Set(existing.map((t) => t.name.trim().toLowerCase()));
+      const toAdd = [];
+      let skipped = 0;
+      data.templates.forEach((raw, i) => {
+        const name = raw && str(raw.name, 60);
+        const html = raw && str(raw.html, TEMPLATE_MAX_BYTES);
+        if (!name || !name.trim() || !html || noteIsEmpty(html)) {
+          skipped++;
+          return;
+        }
+        if (names.has(name.trim().toLowerCase()) || existing.length + toAdd.length >= TEMPLATES_MAX) {
+          skipped++;
+          return;
+        }
+        names.add(name.trim().toLowerCase());
+        const template = {
+          id: "t" + Date.now() + "i" + i,
+          name: name.trim(),
+          typeLabel: str(raw.typeLabel, 200) || "",
+          subtypeLabel: str(raw.subtypeLabel, 200) || "",
+          title: str(raw.title, 100) || "",
+          points: str(raw.points, 20) || "",
+          tags: str(raw.tags, 300) || "",
+          html: cleanImportedHtml(html),
+          ts: Date.now(),
+        };
+        if (templateTooBig(template)) {
+          skipped++;
+          return;
+        }
+        toAdd.push(template);
+      });
+      let pending = toAdd.length;
+      let failed = 0;
+      if (!pending) {
+        callback({ added: 0, skipped });
+        return;
+      }
+      toAdd.forEach((t) =>
+        putPastoralTemplate(t, (ok) => {
+          if (!ok) failed++;
+          if (--pending === 0) {
+            callback({ added: toAdd.length - failed, skipped: skipped + failed });
+          }
+        })
+      );
+    });
+  }
+
+  function openManageTemplates() {
+    if (document.querySelector(".my-tpl-modal-overlay")) return;
+    const overlay = document.createElement("div");
+    overlay.className = "my-tpl-modal-overlay";
+    const modal = document.createElement("div");
+    modal.className = "my-tpl-modal";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-labelledby", "my-tpl-modal-title");
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    let flashMessage = ""; // shown once after the list redraws
+
+    function close() {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey);
+    }
+    function onKey(event) {
+      if (event.key === "Escape") close();
+    }
+    document.addEventListener("keydown", onKey);
+    overlay.addEventListener("mousedown", (event) => {
+      if (event.target === overlay) close();
+    });
+
+    function button(label, onClick, cls) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      if (cls) b.className = cls;
+      b.addEventListener("click", onClick);
+      return b;
+    }
+
+    function render() {
+      modal.textContent = "";
+      const title = document.createElement("h2");
+      title.id = "my-tpl-modal-title";
+      modal.appendChild(title);
+
+      const body = document.createElement("div");
+      body.className = "my-tpl-modal-list";
+      modal.appendChild(body);
+
+      const tools = document.createElement("div");
+      tools.className = "my-tpl-modal-tools";
+      modal.appendChild(tools);
+
+      loadPastoralTemplates((list) => {
+        title.textContent = "My templates (" + list.length + ")";
+        if (!list.length) {
+          const empty = document.createElement("p");
+          empty.textContent = "No templates yet. Save one after your next note.";
+          body.appendChild(empty);
+        }
+        list
+          .slice()
+          .sort((x, y) => x.name.localeCompare(y.name))
+          .forEach((t) => {
+            const row = document.createElement("div");
+            row.className = "my-tpl-row";
+            const info = document.createElement("div");
+            info.className = "my-tpl-row-info";
+            const name = document.createElement("strong");
+            name.textContent = t.name;
+            const meta = document.createElement("span");
+            meta.textContent = [t.typeLabel, t.subtypeLabel].filter(Boolean).join(" › ");
+            info.append(name, meta);
+            const actions = document.createElement("div");
+            actions.className = "my-tpl-row-actions";
+            const msg = document.createElement("div");
+            msg.className = "my-tpl-msg";
+
+            actions.append(
+              button("Rename", () => {
+                info.textContent = "";
+                actions.textContent = "";
+                const input = document.createElement("input");
+                input.type = "text";
+                input.maxLength = 60;
+                input.value = t.name;
+                input.setAttribute("aria-label", "New name");
+                info.appendChild(input);
+                input.focus();
+                input.select();
+                const save = () => {
+                  const next = input.value.trim();
+                  if (!next) {
+                    msg.textContent = "Give it a name.";
+                    return;
+                  }
+                  if (list.some((o) => o.id !== t.id && o.name.trim().toLowerCase() === next.toLowerCase())) {
+                    msg.textContent = "You already have one called “" + next + "”.";
+                    return;
+                  }
+                  putPastoralTemplate(Object.assign({}, t, { name: next }), (ok) => {
+                    if (ok) render();
+                    else msg.textContent = "Couldn't save the new name.";
+                  });
+                };
+                input.addEventListener("keydown", (event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    save();
+                  }
+                });
+                actions.append(button("Save", save), button("Cancel", render));
+              }),
+              button("Delete", () => {
+                actions.textContent = "";
+                const ask = document.createElement("span");
+                ask.textContent = "Delete this template?";
+                actions.append(
+                  ask,
+                  button("Delete", () =>
+                    removePastoralTemplate(t.id, (ok) => {
+                      if (ok) render();
+                      else msg.textContent = "Couldn't delete it.";
+                    })
+                  , "my-tpl-danger"),
+                  button("Keep", render)
+                );
+              })
+            );
+            row.append(info, actions, msg);
+            body.appendChild(row);
+          });
+
+        const exportArea = document.createElement("textarea");
+        exportArea.className = "my-tpl-textarea";
+        exportArea.readOnly = true;
+        exportArea.hidden = true;
+        exportArea.setAttribute("aria-label", "Exported templates");
+        const importArea = document.createElement("textarea");
+        importArea.className = "my-tpl-textarea";
+        importArea.hidden = true;
+        importArea.placeholder = "Paste exported templates here";
+        importArea.setAttribute("aria-label", "Templates to import");
+        const status = document.createElement("div");
+        status.className = "my-tpl-msg my-tpl-msg--info";
+        status.setAttribute("role", "status");
+        status.textContent = flashMessage;
+        flashMessage = "";
+
+        const exportBtn = button("Export as text", () => {
+          importArea.hidden = true;
+          doImport.hidden = true;
+          exportArea.value = exportTemplatesText(list);
+          exportArea.hidden = false;
+          copyBtn.hidden = false;
+          exportArea.focus();
+          exportArea.select();
+          status.textContent = "Send this text to a colleague. They paste it under Import.";
+        });
+        const copyBtn = button("Copy", () => {
+          exportArea.select();
+          let ok = false;
+          try {
+            ok = document.execCommand("copy");
+          } catch (err) {
+            ok = false;
+          }
+          status.textContent = ok ? "Copied." : "Select the text and copy it yourself.";
+        });
+        copyBtn.hidden = true;
+        const doImport = button("Import", () => {
+          importTemplatesText(importArea.value, (result) => {
+            if (result.error) {
+              status.textContent = result.error;
+              return;
+            }
+            flashMessage =
+              "Imported " + result.added + ", skipped " + result.skipped +
+              (result.skipped ? " (name already used, invalid, or over the limit)." : ".");
+            render();
+          });
+        }, "my-tpl-primary");
+        doImport.hidden = true;
+        const importBtn = button("Import from text", () => {
+          exportArea.hidden = true;
+          copyBtn.hidden = true;
+          importArea.hidden = false;
+          doImport.hidden = false;
+          importArea.focus();
+        });
+
+        tools.append(
+          exportBtn, copyBtn, importBtn, exportArea, importArea, doImport, status,
+          button("Close", close, "my-tpl-close")
+        );
+      });
+    }
+    render();
+  }
+
   function buildTemplatesButton() {
     if (document.querySelector(".my-tpl-wrap")) return;
 
@@ -5579,6 +5923,16 @@
           input.focus();
         });
         panel.appendChild(save);
+
+        const manage = document.createElement("button");
+        manage.type = "button";
+        manage.className = "my-tpl-save my-tpl-manage";
+        manage.textContent = "Manage templates";
+        manage.addEventListener("click", () => {
+          close();
+          openManageTemplates();
+        });
+        panel.appendChild(manage);
 
         loadPromptOff((off) => {
           if (!off) return;
