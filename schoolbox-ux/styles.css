@@ -2238,3 +2238,53 @@ body.my-status-grid .my-grid-row input[name="mark"].my-grid-bad { border-color: 
 .my-tpl-search {
   font-family: inherit;
 }
+
+/* Prompt after saving */
+.my-tpl-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+  padding: 8px 14px;
+  font-size: 0.95em;
+  background: #ddefd6;
+  border: 1px solid #a8d39a;
+  border-radius: 4px;
+  color: #1f4d12;
+}
+.my-tpl-banner--form { flex-direction: column; align-items: stretch; gap: 8px; }
+.my-tpl-banner label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; }
+.my-tpl-banner label input { margin: 0; max-width: 420px; }
+.my-tpl-banner-link {
+  min-height: 44px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: inherit;
+  color: rgb(21, 82, 107);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.my-tpl-banner-primary { font-weight: 700; }
+.my-tpl-banner-actions { display: flex; gap: 8px; }
+.my-tpl-banner-note { font-size: 0.85em; color: #33404d; }
+.my-tpl-preview {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #c9cfd8;
+  border-radius: 4px;
+  color: #1f2933;
+  line-height: 1.5;
+}
+.my-tpl-chip {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #dce9ee;
+  color: rgb(21, 82, 107);
+  font-weight: 700;
+  font-size: 0.9em;
+}

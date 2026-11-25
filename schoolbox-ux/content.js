@@ -5012,6 +5012,7 @@
           );
           return;
         }
+        tplLastAppliedHtml = template.html;
         showTemplateStrip("Applied “" + template.name + "”. Student tokens fill in when you save.", true);
         // Remember when it was used, so the dropdown can list it first.
         loadPastoralTemplates((list) => {
@@ -5024,41 +5025,426 @@
     });
   }
 
+  // ---- Student tokens ------------------------------------------------
+  // The student's name as the page shows it (the <h1> on both the
+  // insert page and the profile page). Split on spaces: first word is
+  // the first name, the rest the surname - a guess, which is why the
+  // preview shows what was converted.
+  function readStudentNames() {
+    const h1 = document.querySelector("h1");
+    const full = h1 ? h1.textContent.replace(/\s+/g, " ").trim() : "";
+    if (!full || full.split(" ").length > 6) return null;
+    const parts = full.split(" ");
+    return {
+      full,
+      first: parts[0],
+      surname: parts.length > 1 ? parts.slice(1).join(" ") : "",
+    };
+  }
+
+  function makeTokenSpan(doc, token) {
+    const span = doc.createElement("span");
+    span.className = "mention";
+    span.setAttribute("data-mention", "[" + token + "]");
+    span.textContent = "[" + token + "]";
+    return span;
+  }
+
+  // Turns the student's typed name in the note into live tokens
+  // ([fullname], [surname], [firstname]) - text only, whole words,
+  // never inside an existing token. Returns {html, count}.
+  function tokeniseStudentNames(html, names) {
+    if (!names || !html) return { html: html || "", count: 0 };
+    const lookup = new Map();
+    [
+      [names.full, "fullname"],
+      [names.surname, "surname"],
+      [names.first, "firstname"],
+    ].forEach(([text, token]) => {
+      if (text && text.length > 1) lookup.set(text.toLowerCase(), token);
+    });
+    if (!lookup.size) return { html, count: 0 };
+    const alternation = Array.from(lookup.keys())
+      .sort((x, y) => y.length - x.length)
+      .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|");
+    const re = new RegExp("(?<![A-Za-z])(" + alternation + ")(?![A-Za-z])", "gi");
+
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) {
+      if (!walker.currentNode.parentElement.closest(".mention")) {
+        textNodes.push(walker.currentNode);
+      }
+    }
+    let count = 0;
+    textNodes.forEach((node) => {
+      const text = node.nodeValue;
+      re.lastIndex = 0;
+      let last = 0;
+      let match;
+      const frag = doc.createDocumentFragment();
+      while ((match = re.exec(text))) {
+        frag.appendChild(doc.createTextNode(text.slice(last, match.index)));
+        frag.appendChild(makeTokenSpan(doc, lookup.get(match[1].toLowerCase())));
+        last = match.index + match[0].length;
+        count++;
+      }
+      if (last === 0) return;
+      frag.appendChild(doc.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    });
+    return { html: doc.body.innerHTML, count };
+  }
+
+  // Renders note HTML as plain lines with tokens as chips - no
+  // innerHTML, so nothing in a note can run.
+  function renderNotePreview(container, html) {
+    container.textContent = "";
+    const doc = new DOMParser().parseFromString(html || "", "text/html");
+    function inline(node, into) {
+      node.childNodes.forEach((child) => {
+        if (child.nodeType === Node.TEXT_NODE) {
+          into.appendChild(document.createTextNode(child.nodeValue));
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          if (child.classList.contains("mention")) {
+            const chip = document.createElement("span");
+            chip.className = "my-tpl-chip";
+            chip.textContent = child.textContent;
+            into.appendChild(chip);
+          } else {
+            inline(child, into);
+          }
+        }
+      });
+    }
+    Array.from(doc.body.childNodes).forEach((node) => {
+      const line = document.createElement("div");
+      if (node.nodeType === Node.TEXT_NODE) {
+        line.textContent = node.nodeValue;
+      } else {
+        inline(node, line);
+      }
+      if (line.textContent.trim()) container.appendChild(line);
+    });
+  }
+
+  function noteIsEmpty(html) {
+    return !String(html || "").replace(/<[^>]*>|&nbsp;|\s/g, "");
+  }
+
+  function normalizeNoteHtml(html) {
+    return String(html || "")
+      .replace(/&nbsp;| /g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // Adds a Template from form fields {typeLabel, subtypeLabel, title,
+  // points, tags, html}. onDone(errorMessage | null).
+  function storeTemplateFromForm(form, name, onDone) {
+    loadPastoralTemplates((list) => {
+      if (list.length >= TEMPLATES_MAX) {
+        onDone("You have " + TEMPLATES_MAX + " templates already. Delete one first.");
+        return;
+      }
+      if (list.some((t) => t.name.trim().toLowerCase() === name.trim().toLowerCase())) {
+        onDone("A template called “" + name.trim() + "” already exists.");
+        return;
+      }
+      list.push({
+        id: "t" + Date.now(),
+        name: name.trim(),
+        typeLabel: form.typeLabel,
+        subtypeLabel: form.subtypeLabel,
+        title: form.title,
+        points: form.points,
+        tags: form.tags,
+        html: form.html,
+        ts: Date.now(),
+      });
+      storePastoralTemplates(list, (ok) =>
+        onDone(ok ? null : "Couldn't save. Chrome storage is full or unavailable.")
+      );
+    });
+  }
+
   function saveCurrentAsTemplate(name, onDone) {
     readTemplateForm((form) => {
       if (!form.ok) {
         onDone("Couldn't read the note editor.");
         return;
       }
-      if (!form.html.replace(/<[^>]*>|&nbsp;|\s/g, "")) {
+      if (noteIsEmpty(form.html)) {
         onDone("The General note is empty.");
         return;
       }
-      loadPastoralTemplates((list) => {
-        if (list.length >= TEMPLATES_MAX) {
-          onDone("You have " + TEMPLATES_MAX + " templates already. Delete one first.");
-          return;
+      form.html = tokeniseStudentNames(form.html, readStudentNames()).html;
+      storeTemplateFromForm(form, name, onDone);
+    });
+  }
+
+  // ---- Prompt after saving -------------------------------------------
+  // Just before the form submits, the fields are copied into
+  // sessionStorage (synchronous, so it survives the page change, and
+  // gone when the tab closes). Schoolbox then lands on the student's
+  // profile page, where a banner offers to keep the note. It only
+  // shows if: it's the same student, under 15 minutes old, we came
+  // from the insert page, and the newest record's title matches (the
+  // same history check the PMI sequence banner uses). It's skipped for
+  // an empty note, a note that came from a Template or a Native
+  // template, an identical saved Template, or "Don't ask again".
+  const TPL_PENDING_KEY = "myTplPending";
+  const TPL_PENDING_MAX_AGE_MS = 15 * 60 * 1000;
+  const TPL_PROMPT_OFF_KEY = "pastoralTemplatesPromptOff";
+  let tplLastAppliedHtml = null;
+  let tplBannerBuilding = false;
+
+  function loadPromptOff(callback) {
+    try {
+      chrome.storage.sync.get({ [TPL_PROMPT_OFF_KEY]: false }, (r) =>
+        callback(!!r[TPL_PROMPT_OFF_KEY])
+      );
+    } catch (err) {
+      callback(false);
+    }
+  }
+
+  // Schoolbox keeps each Sub-type's Native template in an inline
+  // script (const subtypesIndex = {...}, one line); read it so a note
+  // that is still the untouched Native template isn't offered.
+  function readNativeTemplateHtml(typeValue, subtypeValue) {
+    try {
+      const name = subtypeValue ? "subtypesIndex" : "typesIndex";
+      const key = subtypeValue || typeValue;
+      for (const script of document.scripts) {
+        const text = script.textContent;
+        const at = text.indexOf("const " + name + " = ");
+        if (at < 0) continue;
+        const start = text.indexOf("{", at);
+        const end = text.indexOf("\n", start);
+        const json = text.slice(start, end < 0 ? undefined : end).trim().replace(/;$/, "");
+        let parsed = null;
+        try {
+          parsed = JSON.parse(json);
+        } catch (err) {
+          continue; // a mention in another script's text, not the data
         }
-        if (list.some((t) => t.name.trim().toLowerCase() === name.trim().toLowerCase())) {
-          onDone("A template called “" + name.trim() + "” already exists.");
-          return;
-        }
-        list.push({
-          id: "t" + Date.now(),
-          name: name.trim(),
-          typeLabel: form.typeLabel,
-          subtypeLabel: form.subtypeLabel,
-          title: form.title,
-          points: form.points,
-          tags: form.tags,
-          html: form.html,
-          ts: Date.now(),
-        });
-        storePastoralTemplates(list, (ok) =>
-          onDone(ok ? null : "Couldn't save. Chrome storage is full or unavailable.")
+        const value = parsed[key];
+        return value == null ? "" : String(value);
+      }
+    } catch (err) {
+      /* not found: treat as no Native template */
+    }
+    return "";
+  }
+
+  function snapshotForPrompt() {
+    const studentId = getPastoralStudentIdFromUrl();
+    if (!studentId) return;
+    readTemplateForm((form) => {
+      try {
+        sessionStorage.removeItem(TPL_PENDING_KEY);
+      } catch (err) {
+        return;
+      }
+      if (!form.ok || noteIsEmpty(form.html)) return;
+      const typeSelect = document.querySelector("#typeId");
+      const subtypeSelect = document.querySelector("#subtypeId");
+      const native = readNativeTemplateHtml(
+        typeSelect ? typeSelect.value : "",
+        subtypeSelect ? subtypeSelect.value : ""
+      );
+      const current = normalizeNoteHtml(form.html);
+      if (native && normalizeNoteHtml(native) === current) return;
+      if (tplLastAppliedHtml && normalizeNoteHtml(tplLastAppliedHtml) === current) return;
+      const names = readStudentNames();
+      try {
+        sessionStorage.setItem(
+          TPL_PENDING_KEY,
+          JSON.stringify({
+            studentId,
+            ts: Date.now(),
+            names,
+            form: {
+              typeLabel: form.typeLabel,
+              subtypeLabel: form.subtypeLabel,
+              title: form.title,
+              points: form.points,
+              tags: form.tags,
+              html: form.html,
+            },
+          })
         );
+      } catch (err) {
+        /* storage unavailable: no prompt */
+      }
+    });
+  }
+
+  function hookTemplatePrompt() {
+    const form = document.getElementById("pastoralForm");
+    if (!form || form.dataset.myTplHooked) return;
+    form.dataset.myTplHooked = "1";
+    // A fresh insert page is not a finished save.
+    try {
+      sessionStorage.removeItem(TPL_PENDING_KEY);
+    } catch (err) {
+      /* ignore */
+    }
+    loadPromptOff((off) => {
+      if (off) return;
+      form.addEventListener("submit", snapshotForPrompt, true);
+      const submit = form.querySelector("[data-submit]");
+      if (submit) submit.addEventListener("click", snapshotForPrompt, true);
+    });
+  }
+
+  function addTemplatePromptOnProfilePage() {
+    if (document.querySelector(".my-tpl-banner") || tplBannerBuilding) return;
+    let pending = null;
+    try {
+      pending = JSON.parse(sessionStorage.getItem(TPL_PENDING_KEY) || "null");
+    } catch (err) {
+      pending = null;
+    }
+    if (!pending || !pending.form) return;
+    const studentId = getPastoralProfileStudentIdFromUrl();
+    const fresh = Date.now() - pending.ts <= TPL_PENDING_MAX_AGE_MS;
+    const cameFromInsert = /\/pastoral\/student\/\d+\/record\/insert/.test(document.referrer);
+    if (String(pending.studentId) !== String(studentId) || !fresh || !cameFromInsert) {
+      if (!fresh || String(pending.studentId) !== String(studentId)) {
+        sessionStorage.removeItem(TPL_PENDING_KEY);
+      }
+      return;
+    }
+    const newest = document.querySelector(
+      "#pastoralRecords ul.information-list li.list-item h3"
+    );
+    if (
+      !newest ||
+      newest.textContent.trim().toLowerCase() !== pending.form.title.trim().toLowerCase()
+    ) {
+      return;
+    }
+
+    tplBannerBuilding = true;
+    sessionStorage.removeItem(TPL_PENDING_KEY);
+    loadPromptOff((off) => {
+      loadPastoralTemplates((list) => {
+        tplBannerBuilding = false;
+        if (off || document.querySelector(".my-tpl-banner")) return;
+        const converted = tokeniseStudentNames(pending.form.html, pending.names);
+        const finalHtml = normalizeNoteHtml(converted.html);
+        const duplicate = list.some(
+          (t) =>
+            t.typeLabel === pending.form.typeLabel &&
+            t.subtypeLabel === pending.form.subtypeLabel &&
+            normalizeNoteHtml(t.html) === finalHtml
+        );
+        if (duplicate) return;
+        renderTemplatePromptBanner(pending.form, converted);
       });
     });
+  }
+
+  function renderTemplatePromptBanner(form, converted) {
+    const banner = document.createElement("div");
+    banner.className = "my-tpl-banner";
+    banner.setAttribute("role", "status");
+    const content = document.querySelector("#content") || document.body;
+    content.insertBefore(banner, content.firstChild);
+
+    function link(label, onClick) {
+      const a = document.createElement("button");
+      a.type = "button";
+      a.className = "my-tpl-banner-link";
+      a.textContent = label;
+      a.addEventListener("click", onClick);
+      return a;
+    }
+
+    function showChoices() {
+      banner.textContent = "";
+      const text = document.createElement("span");
+      text.textContent = "Reuse this note later?";
+      banner.append(
+        text,
+        link("Save as template", showNameForm),
+        link("No thanks", () => banner.remove()),
+        link("Don’t ask again", () => {
+          try {
+            chrome.storage.sync.set({ [TPL_PROMPT_OFF_KEY]: true });
+          } catch (err) {
+            /* ignore */
+          }
+          banner.remove();
+        })
+      );
+    }
+
+    function showNameForm() {
+      banner.textContent = "";
+      banner.classList.add("my-tpl-banner--form");
+      const label = document.createElement("label");
+      label.textContent = "Name this template";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.maxLength = 60;
+      input.value = form.title || "";
+      label.appendChild(input);
+
+      const preview = document.createElement("div");
+      preview.className = "my-tpl-preview";
+      renderNotePreview(preview, converted.html);
+
+      const note = document.createElement("div");
+      note.className = "my-tpl-banner-note";
+      note.textContent =
+        (converted.count
+          ? "Replaced " + converted.count + " use" + (converted.count === 1 ? "" : "s") + " of the student’s name with tokens. "
+          : "No student name was found to replace. ") +
+        "Check for any other names or dates. The Confidential note is never saved.";
+
+      const msg = document.createElement("div");
+      msg.className = "my-tpl-msg";
+
+      const actions = document.createElement("div");
+      actions.className = "my-tpl-banner-actions";
+      const save = link("Save template", () => {
+        if (!input.value.trim()) {
+          msg.textContent = "Give it a name.";
+          return;
+        }
+        storeTemplateFromForm(
+          Object.assign({}, form, { html: converted.html }),
+          input.value,
+          (error) => {
+            if (error) {
+              msg.textContent = error;
+              return;
+            }
+            banner.classList.remove("my-tpl-banner--form");
+            banner.textContent = "Saved “" + input.value.trim() + "”. Find it under Templates on the next new record.";
+            setTimeout(() => banner.remove(), 8000);
+          }
+        );
+      });
+      save.classList.add("my-tpl-banner-primary");
+      actions.append(save, link("Cancel", () => banner.remove()));
+      banner.append(label, preview, note, msg, actions);
+      input.focus();
+      input.select();
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          save.click();
+        }
+      });
+    }
+
+    showChoices();
   }
 
   function buildTemplatesButton() {
@@ -5193,6 +5579,23 @@
           input.focus();
         });
         panel.appendChild(save);
+
+        loadPromptOff((off) => {
+          if (!off) return;
+          const again = document.createElement("button");
+          again.type = "button";
+          again.className = "my-tpl-save";
+          again.textContent = "Turn save prompts back on";
+          again.addEventListener("click", () => {
+            try {
+              chrome.storage.sync.remove(TPL_PROMPT_OFF_KEY);
+            } catch (err) {
+              /* ignore */
+            }
+            renderPanel();
+          });
+          panel.appendChild(again);
+        });
       });
     }
 
@@ -5235,8 +5638,12 @@
   }
 
   function addPastoralTemplates() {
-    if (!isPastoralRecordInsertPage()) return;
-    buildTemplatesButton();
+    if (isPastoralRecordInsertPage()) {
+      buildTemplatesButton();
+      hookTemplatePrompt();
+    } else if (isPastoralStudentProfilePage()) {
+      addTemplatePromptOnProfilePage();
+    }
   }
 
   // ---------------------------------------------------------------
