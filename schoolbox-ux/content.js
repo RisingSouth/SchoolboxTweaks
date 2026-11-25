@@ -1378,6 +1378,34 @@
         bar.appendChild(a);
       });
     });
+
+    // Same lookup feeds a "Course page" item in the card's 3-dot menu.
+    document.querySelectorAll(".v-card").forEach((card) => {
+      const menu = card.querySelector("ul.f-dropdown");
+      if (!menu || menu.querySelector(".my-course-menu-item")) return;
+      const title = card.querySelector('.list-item h3 a[href^="/homepage/"]');
+      const m = title && title.getAttribute("href").match(/^\/homepage\/(\d+)\/?$/);
+      if (!m) return;
+      lookUpCourseHref(m[1]).then((href) => {
+        if (!href || !menu.isConnected || menu.querySelector(".my-course-menu-item")) return;
+        const li = document.createElement("li");
+        li.className = "my-course-menu-item";
+        const a = document.createElement("a");
+        a.href = href;
+        a.className = "sbx-button--has-icon";
+        const icon = document.createElement("sbx-icon");
+        icon.setAttribute("name", "course");
+        icon.setAttribute("size", "m");
+        icon.setAttribute("color", "currentColor");
+        a.appendChild(icon);
+        a.appendChild(document.createTextNode("Course page"));
+        li.appendChild(a);
+        // After "Class List" (first item), before the report links.
+        const first = menu.querySelector("li");
+        if (first) first.after(li);
+        else menu.appendChild(li);
+      });
+    });
   }
 
   // Header search dropdown: adds a row of small icon buttons under each
