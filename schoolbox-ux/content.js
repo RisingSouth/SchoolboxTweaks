@@ -1360,26 +1360,9 @@
       listItem.appendChild(bar);
     });
 
-    // Course page button: the card's title link is the class page, which
-    // knows its course. Looked up once per class and cached; classes with
-    // no course (Homeroom) never get the button.
-    document.querySelectorAll(".v-card").forEach((card) => {
-      const bar = card.querySelector(".my-quick-links");
-      if (!bar || bar.querySelector(".my-course-link")) return;
-      const title = card.querySelector('.list-item h3 a[href^="/homepage/"]');
-      const m = title && title.getAttribute("href").match(/^\/homepage\/(\d+)\/?$/);
-      if (!m) return;
-      lookUpCourseHref(m[1]).then((href) => {
-        if (!href || !bar.isConnected || bar.querySelector(".my-course-link")) return;
-        const a = document.createElement("a");
-        a.href = href;
-        a.textContent = "Course page";
-        a.className = "my-quick-action-button my-quick-action-button--small my-course-link";
-        bar.appendChild(a);
-      });
-    });
-
-    // Same lookup feeds a "Course page" item in the card's 3-dot menu.
+    // Course page item in the card's 3-dot menu: the card's title link is
+    // the class page, which knows its course. Looked up once per class and
+    // cached; classes with no course (Homeroom) get no item.
     document.querySelectorAll(".v-card").forEach((card) => {
       const menu = card.querySelector("ul.f-dropdown");
       if (!menu || menu.querySelector(".my-course-menu-item")) return;
