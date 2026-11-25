@@ -2466,20 +2466,20 @@ a.fc-timegrid-event.fc-timegrid-event-short .my-tt-links { top: 100%; }
   font: inherit;
 }
 .my-added-link--more[hidden] { display: none; }
-.my-added-link.my-added-link--more {
-  height: 14px;
-  min-width: 14px;
-  width: 14px;
+.my-added-links .my-added-link.my-added-link--more {
+  box-sizing: border-box;
+  width: 16px;
+  min-width: 16px;
+  min-height: 0;
+  height: 26px;
+  margin: 0;
   padding: 0;
-  border-radius: 4px;
-  align-self: center;
-  opacity: 0.75;
+  line-height: 1;
+  align-self: flex-start;
+  opacity: 1;
 }
-.my-added-link--more svg { width: 10px; height: 10px; }
-.my-added-link--more:hover,
-.my-added-link--more:focus-visible,
-.my-added-link--more[aria-expanded="true"] { opacity: 1; }
-a.fc-timegrid-event .my-added-link.my-added-link--more { height: 14px; min-width: 14px; }
+.my-added-links .my-added-link--more svg { width: 14px; height: 14px; }
+a.fc-timegrid-event .my-added-links .my-added-link.my-added-link--more { height: 22px; }
 .my-more-menu {
   position: fixed;
   z-index: 100000;
@@ -2501,3 +2501,4 @@ a.fc-timegrid-event .my-added-link.my-added-link--more { height: 14px; min-width
 }
 .my-more-menu a:hover,
 .my-more-menu a:focus-visible { background: rgb(212, 229, 232); outline: none; }
+.my-added-links .my-added-link--more:hover, .my-added-links .my-added-link--more[aria-expanded="true"] { background: rgb(212, 229, 232); }
