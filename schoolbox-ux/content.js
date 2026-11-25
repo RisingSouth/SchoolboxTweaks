@@ -1657,7 +1657,7 @@
   // the dashboard timetable boxes and the Timetable page's events.
   // title/aria-label carry the name for touch and screen readers; the
   // visible label expands on hover.
-  function buildClassLinkIcons(classId) {
+  function buildClassLinkIcons(classId, { withMore = false } = {}) {
     const wrapper = document.createElement("div");
     wrapper.className = "my-added-links";
 
@@ -1716,6 +1716,8 @@
         "M10 20v-6h4v6",
       ])
     );
+    if (!withMore) return wrapper;
+
     // More (...) button: holds the Course page link. Hidden until we
     // know the class has a course page (see revealCourseIcon).
     const more = document.createElement("button");
@@ -3193,7 +3195,7 @@
       const title = event.querySelector("span.fc-event-title");
       if (!title || !/\([^)]+\)/.test(title.textContent)) return;
 
-      const icons = buildClassLinkIcons(groupClass.slice("group".length));
+      const icons = buildClassLinkIcons(groupClass.slice("group".length), { withMore: true });
       icons.classList.add("my-tt-links");
       // A click on an icon is the icon's, not the calendar's.
       icons.addEventListener("click", (e) => e.stopPropagation());

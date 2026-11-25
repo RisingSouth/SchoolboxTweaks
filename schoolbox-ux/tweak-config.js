@@ -261,7 +261,7 @@ const CHANGELOG = [
     items: [
       {
         title: "Class buttons on the Timetable page",
-        text: "Hover (or Tab to) a lesson on the Timetable page for Class List, Markbook and Go to class. The ⋯ button opens the class's Course page. The same Go to class and Course page buttons now appear on the home page timetable. Turn it off in the Timetable page group.",
+        text: "Hover (or Tab to) a lesson on the Timetable page for Class List, Markbook and Go to class. The ⋯ button opens the class's Course page. The home page timetable also gets a Go to class button. Turn it off in the Timetable page group.",
       },
       {
         title: "My duties on the Timetable page",
