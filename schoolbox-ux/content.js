@@ -1660,7 +1660,7 @@
   // the dashboard timetable boxes and the Timetable page's events.
   // title/aria-label carry the name for touch and screen readers; the
   // visible label expands on hover.
-  function buildClassLinkIcons(classId) {
+  function buildClassLinkIcons(classId, { goToClass = false } = {}) {
     const wrapper = document.createElement("div");
     wrapper.className = "my-added-links";
 
@@ -1712,13 +1712,17 @@
         "M10 4v16",
       ])
     );
-    wrapper.appendChild(
-      makeIconLink(`/homepage/${classId}`, "Go to class", [
-        "M3 11l9-8 9 8",
-        "M5 10v10h14V10",
-        "M10 20v-6h4v6",
-      ])
-    );
+    // Go to class is only on the Timetable page (the home page timetable
+    // already links the class name).
+    if (goToClass) {
+      wrapper.appendChild(
+        makeIconLink(`/homepage/${classId}`, "Go to class", [
+          "M3 11l9-8 9 8",
+          "M5 10v10h14V10",
+          "M10 20v-6h4v6",
+        ])
+      );
+    }
     return wrapper;
   }
 
@@ -3129,7 +3133,7 @@
       const title = event.querySelector("span.fc-event-title");
       if (!title || !/\([^)]+\)/.test(title.textContent)) return;
 
-      const icons = buildClassLinkIcons(groupClass.slice("group".length));
+      const icons = buildClassLinkIcons(groupClass.slice("group".length), { goToClass: true });
       icons.classList.add("my-tt-links");
       // A click on an icon is the icon's, not the calendar's.
       icons.addEventListener("click", (e) => e.stopPropagation());

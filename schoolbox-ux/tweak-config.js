@@ -269,7 +269,7 @@ const CHANGELOG = [
       },
       {
         title: "Class buttons on the Timetable page",
-        text: "Hover (or Tab to) a lesson on the Timetable page for Class List, Markbook and Go to class. Clicking a lesson also adds a Course page button to its pop-up. The home page timetable also gets a Go to class button. Turn it off in the Timetable page group.",
+        text: "Hover (or Tab to) a lesson on the Timetable page for Class List, Markbook and Go to class. Clicking a lesson also adds a Course page button to its pop-up. Turn it off in the Timetable page group.",
       },
       {
         title: "My duties on the Timetable page",
