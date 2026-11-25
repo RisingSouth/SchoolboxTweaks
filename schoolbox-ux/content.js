@@ -4827,6 +4827,7 @@
 
   const TEMPLATES_STORAGE_KEY = "pastoralTemplates";
   const TEMPLATES_MAX = 50;
+  const TEMPLATES_SEARCH_MIN = 7; // show the search box above this many
   const TPL_BRIDGE_ID = "my-tpl-bridge";
   let tplRequestCounter = 0;
   let tplUndoSnapshot = null;
@@ -5012,6 +5013,13 @@
           return;
         }
         showTemplateStrip("Applied “" + template.name + "”. Student tokens fill in when you save.", true);
+        // Remember when it was used, so the dropdown can list it first.
+        loadPastoralTemplates((list) => {
+          const stored = list.find((t) => t.id === template.id);
+          if (!stored) return;
+          stored.lastUsed = Date.now();
+          storePastoralTemplates(list, () => {});
+        });
       });
     });
   }
@@ -5083,7 +5091,16 @@
         head.textContent = list.length ? "Your templates" : "No templates yet";
         panel.appendChild(head);
 
-        list.forEach((t) => {
+        // Most recently used first, then A-Z. A search box appears once
+        // the list is long enough to need one; the list itself scrolls.
+        const sorted = list.slice().sort(
+          (a, b) =>
+            (b.lastUsed || 0) - (a.lastUsed || 0) ||
+            a.name.localeCompare(b.name)
+        );
+        const scroller = document.createElement("div");
+        scroller.className = "my-tpl-list";
+        const items = sorted.map((t) => {
           const item = document.createElement("button");
           item.type = "button";
           item.className = "my-tpl-item";
@@ -5092,14 +5109,41 @@
           name.textContent = t.name;
           const meta = document.createElement("span");
           meta.className = "my-tpl-item-meta";
-          meta.textContent = [t.typeLabel, t.subtypeLabel].filter(Boolean).join(" › ");
+          meta.textContent = [t.typeLabel, t.subtypeLabel].filter(Boolean).join(" \u203A ");
           item.append(name, meta);
           item.addEventListener("click", () => {
             close();
             applyPastoralTemplate(t);
           });
-          panel.appendChild(item);
+          scroller.appendChild(item);
+          return { item, text: (t.name + " " + meta.textContent).toLowerCase() };
         });
+
+        if (list.length > TEMPLATES_SEARCH_MIN) {
+          const search = document.createElement("input");
+          search.type = "search";
+          search.className = "my-tpl-search";
+          search.placeholder = "Search templates";
+          search.setAttribute("aria-label", "Search templates");
+          const none = document.createElement("div");
+          none.className = "my-tpl-none";
+          none.textContent = "No match.";
+          none.hidden = true;
+          search.addEventListener("input", () => {
+            const q = search.value.trim().toLowerCase();
+            let shown = 0;
+            items.forEach((entry) => {
+              const match = !q || entry.text.includes(q);
+              entry.item.hidden = !match;
+              if (match) shown++;
+            });
+            none.hidden = shown > 0;
+          });
+          panel.appendChild(search);
+          scroller.appendChild(none);
+          setTimeout(() => search.focus(), 0);
+        }
+        panel.appendChild(scroller);
 
         const save = document.createElement("button");
         save.type = "button";
