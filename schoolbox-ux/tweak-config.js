@@ -77,7 +77,6 @@ const TWEAK_GROUPS = [
       },
       {
         id: "markbookPeriodMemory",
-        since: "1.2.10",
         label: "Remember academic period filter",
         description: "Remembers the Due in Academic Period you last applied and re-applies it on each visit (this year / current / current + previous / fixed); a fixed choice drops back to the default when a newer period appears",
       },
@@ -219,13 +218,11 @@ const TWEAK_GROUPS = [
     tweaks: [
       {
         id: "assessmentStatusGrid",
-        since: "1.2.10",
         label: "Marking grid",
         description: "Spreadsheet-style marking page: one row per student, type marks and feedback with Enter/arrow keys, A/N/S or the ▾ menu for Absent/Not Assessed/Not Submitted, stats, Unmarked/Drafts filters, per-row Publish, hover portraits. Staff can switch back to Classic on the page",
       },
       {
         id: "assessmentStatusLimit",
-        since: "1.2.10",
         label: "Show up to 50 students per page",
         description: "Raises Schoolbox's 25-per-page cap on the assessment status page (takes effect on next page load)",
       },
@@ -252,23 +249,6 @@ const CHANGELOG = [
       {
         title: "Cancelled lessons and room changes",
         text: "After \"Check relief\", cancelled lessons and room swaps are marked on the dashboard timetable. Edval events now also appear in the relief list.",
-      },
-    ],
-  },
-  {
-    version: "1.2.10",
-    items: [
-      {
-        title: "Marking grid",
-        text: "New \"Assessment status page\" group in Settings. Turns the grid on or off; when off, the status page stays as Schoolbox made it.",
-      },
-      {
-        title: "Show up to 50 students per page",
-        text: "Controls the 25 to 50 limit on the assessment status page. Applies on the next page load.",
-      },
-      {
-        title: "Remember academic period filter",
-        text: "In the Markbook group. Turns the automatic period memory on or off.",
       },
     ],
   },
