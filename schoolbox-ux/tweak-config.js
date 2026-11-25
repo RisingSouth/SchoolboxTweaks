@@ -205,6 +205,11 @@ const TWEAK_GROUPS = [
         label: "Commendation shortcut",
         description: "Sets Type/Sub-type to Recognition / Commendation and the Title to \"Commendation\" - you still press Save",
       },
+      {
+        id: "pastoralTemplates",
+        label: "Templates for pastoral notes",
+        description: "Templates button on the new-record form: apply your own saved notes (Type, Sub-type, Title, points, tags and the General note) - you still press Save",
+      },
     ],
   },
   {

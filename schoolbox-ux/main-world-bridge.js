@@ -163,3 +163,116 @@
     });
   });
 })();
+
+// ---------------------------------------------------------------
+// Pastoral note Templates: read/write the note editor and the Tags
+// field. Same reason as the PMI helper above - window.sbProps.editors
+// and the Tags field's selectize instance only exist in this (MAIN)
+// world.
+//
+// The payload (note HTML, tags) travels as JSON in an attribute on a
+// hidden element in the shared DOM, not in CustomEvent.detail, so the
+// feature doesn't depend on how event detail crosses worlds. Only the
+// note editor's own HTML goes through - never a field the page marks
+// Confidential (body_private is never read here).
+//
+// Ops, request in data-request ({id, op, ...}), reply in data-response:
+//  - "read":  {ok, html, tags}   the General note HTML and Tags value
+//  - "write": {ok, reason}       setData(html) then EDITOR__CHECK_DATA,
+//             exactly what Schoolbox's own replaceTemplate() does
+//  - "tags":  {ok, reason}       sets the Tags field via selectize
+//
+// NOT confirmed live: the tags op (selectize.setValue with tag names
+// that may or may not already be options).
+// ---------------------------------------------------------------
+(function () {
+  const BRIDGE_ID = "my-tpl-bridge";
+
+  function editor() {
+    try {
+      return (
+        (window.sbProps &&
+          window.sbProps.editors &&
+          window.sbProps.editors.body_public) ||
+        null
+      );
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function tagsInput() {
+    return document.getElementById("tags");
+  }
+
+  function handle(req) {
+    if (req.op === "read") {
+      const ed = editor();
+      if (!ed) return { ok: false, reason: "no-editor" };
+      let html = "";
+      try {
+        html = ed.getData();
+      } catch (err) {
+        return { ok: false, reason: "no-editor" };
+      }
+      const tags = tagsInput();
+      return { ok: true, html, tags: tags ? tags.value || "" : "" };
+    }
+
+    if (req.op === "write") {
+      const ed = editor();
+      if (!ed) return { ok: false, reason: "no-editor" };
+      try {
+        ed.setData(String(req.html || ""));
+        ed.sourceElement.dispatchEvent(new CustomEvent("EDITOR__CHECK_DATA"));
+      } catch (err) {
+        return { ok: false, reason: "set-failed" };
+      }
+      return { ok: true };
+    }
+
+    if (req.op === "tags") {
+      const el = tagsInput();
+      if (!el) return { ok: false, reason: "no-tags" };
+      const names = String(req.tags || "")
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      try {
+        if (el.selectize) {
+          el.selectize.clear(true);
+          names.forEach((n) => {
+            if (!el.selectize.options[n]) {
+              el.selectize.addOption({ value: n, text: n });
+            }
+          });
+          el.selectize.setValue(names, true);
+        } else {
+          el.value = names.join(",");
+        }
+      } catch (err) {
+        return { ok: false, reason: "tags-failed" };
+      }
+      return { ok: true };
+    }
+
+    return { ok: false, reason: "bad-op" };
+  }
+
+  document.addEventListener("my-tpl-request", () => {
+    const bridge = document.getElementById(BRIDGE_ID);
+    if (!bridge) return;
+    let req = null;
+    try {
+      req = JSON.parse(bridge.getAttribute("data-request") || "null");
+    } catch (err) {
+      req = null;
+    }
+    const result = req ? handle(req) : { ok: false, reason: "bad-request" };
+    bridge.setAttribute(
+      "data-response",
+      JSON.stringify({ id: req && req.id, ...result })
+    );
+    document.dispatchEvent(new Event("my-tpl-response"));
+  });
+})();

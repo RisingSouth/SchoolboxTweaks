@@ -57,6 +57,7 @@
     if (tweakToggles.pastoralRecordHistoryPanel) addPastoralRecordHistoryPanel();
     if (tweakToggles.pastoralPmiStepback) addPmiStepbackHelper();
     if (tweakToggles.pastoralCommendation) addCommendationHelper();
+    if (tweakToggles.pastoralTemplates) addPastoralTemplates();
 
     if (tweakToggles.courseListImprovements) initCourseListPage();
 
@@ -4789,6 +4790,409 @@
   function addCommendationHelper() {
     if (!isPastoralRecordInsertPage()) return;
     buildCommendationButton();
+  }
+
+  // ---------------------------------------------------------------
+  // Pastoral record insert page: Templates (untested)
+  //
+  // A teacher's own saved copies of a pastoral note - see GLOSSARY.md
+  // ("Template" vs "Native template", which is Schoolbox's own
+  // per-Sub-type note). Stored per teacher in chrome.storage.sync
+  // under "pastoralTemplates" as a list of
+  //   {id, name, typeLabel, subtypeLabel, title, points, tags, html, ts}
+  // A Template holds Type, Sub-type, Title, Points, Tags and the
+  // General note only - never Occurred on, the student, or the
+  // Confidential note (body_private is never read anywhere here).
+  //
+  // The note is the General CKEditor's own HTML, so Student tokens
+  // (<span class="mention" data-mention="[firstname]">) are kept as
+  // markup and come back as live tokens - Schoolbox's own
+  // replaceTemplate() loads its Native templates the same way
+  // (setData + EDITOR__CHECK_DATA). Reading and writing the editor
+  // happens in main-world-bridge.js, over a hidden element in the
+  // shared DOM.
+  //
+  // Applying: Type, then Sub-type (which makes Schoolbox load its
+  // Native template, if any), THEN our note - so ours always wins.
+  // Before applying, the form is snapshotted so "Undo" can put it
+  // back. Nothing here ever presses Save.
+  //
+  // NOT CONFIRMED against a live page: the bridge round-trip, the
+  // Tags field (selectize) write, and that a template's Type/Sub-type
+  // labels match #typeId / #subtypeId option text exactly.
+  // Not built yet: converting the student's typed name to a token on
+  // save, the post-save prompt, the manage list, and the settings
+  // toggle (this one is gated by "pastoralTemplates" already).
+  // ---------------------------------------------------------------
+
+  const TEMPLATES_STORAGE_KEY = "pastoralTemplates";
+  const TEMPLATES_MAX = 50;
+  const TPL_BRIDGE_ID = "my-tpl-bridge";
+  let tplRequestCounter = 0;
+  let tplUndoSnapshot = null;
+
+  function loadPastoralTemplates(callback) {
+    try {
+      chrome.storage.sync.get({ [TEMPLATES_STORAGE_KEY]: [] }, (result) => {
+        const list = result[TEMPLATES_STORAGE_KEY];
+        callback(Array.isArray(list) ? list : []);
+      });
+    } catch (err) {
+      callback([]);
+    }
+  }
+
+  function storePastoralTemplates(list, callback) {
+    try {
+      chrome.storage.sync.set({ [TEMPLATES_STORAGE_KEY]: list }, () => {
+        callback(!chrome.runtime.lastError);
+      });
+    } catch (err) {
+      callback(false);
+    }
+  }
+
+  // One request to main-world-bridge.js. Resolves {ok:false} on a
+  // timeout (bridge not loaded) rather than hanging.
+  function tplBridge(request, callback) {
+    let bridge = document.getElementById(TPL_BRIDGE_ID);
+    if (!bridge) {
+      bridge = document.createElement("div");
+      bridge.id = TPL_BRIDGE_ID;
+      bridge.hidden = true;
+      document.body.appendChild(bridge);
+    }
+    const id = "tpl-" + Date.now() + "-" + ++tplRequestCounter;
+    let settled = false;
+
+    function onResponse() {
+      let res = null;
+      try {
+        res = JSON.parse(bridge.getAttribute("data-response") || "null");
+      } catch (err) {
+        res = null;
+      }
+      if (!res || res.id !== id || settled) return;
+      settled = true;
+      document.removeEventListener("my-tpl-response", onResponse);
+      clearTimeout(timer);
+      callback(res);
+    }
+    document.addEventListener("my-tpl-response", onResponse);
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("my-tpl-response", onResponse);
+      callback({ ok: false, reason: "no-response" });
+    }, 4000);
+
+    bridge.setAttribute("data-request", JSON.stringify({ id, ...request }));
+    document.dispatchEvent(new Event("my-tpl-request"));
+  }
+
+  function selectedOptionLabel(select) {
+    const option = select && select.options[select.selectedIndex];
+    return option && option.value !== "" ? option.textContent.trim() : "";
+  }
+
+  // The form as it stands now: what a Template (or an Undo snapshot)
+  // holds. The note and tags come from the bridge.
+  function readTemplateForm(callback) {
+    const typeSelect = document.querySelector("#typeId");
+    const subtypeSelect = document.querySelector("#subtypeId");
+    const headingInput = document.querySelector("#heading");
+    const pointsInput = document.querySelector("#points");
+    tplBridge({ op: "read" }, (res) => {
+      callback({
+        ok: !!res.ok,
+        typeLabel: selectedOptionLabel(typeSelect),
+        subtypeLabel: selectedOptionLabel(subtypeSelect),
+        title: headingInput ? headingInput.value : "",
+        points: pointsInput ? pointsInput.value : "",
+        tags: res.ok ? res.tags || "" : "",
+        html: res.ok ? res.html || "" : "",
+      });
+    });
+  }
+
+  // Sets Type then Sub-type by label, then Title, Points, the note and
+  // Tags. An empty typeLabel/subtypeLabel clears that select. onDone
+  // gets false if a label can't be found or the editor isn't there.
+  function applyTemplateFields(fields, onDone) {
+    const typeSelect = document.querySelector("#typeId");
+    const subtypeSelect = document.querySelector("#subtypeId");
+    const headingInput = document.querySelector("#heading");
+    const pointsInput = document.querySelector("#points");
+    if (!typeSelect || !subtypeSelect || !headingInput) {
+      onDone(false);
+      return;
+    }
+
+    function finish() {
+      headingInput.value = fields.title || "";
+      if (pointsInput) pointsInput.value = fields.points || "";
+      tplBridge({ op: "write", html: fields.html || "" }, (res) => {
+        if (!res.ok) {
+          onDone(false);
+          return;
+        }
+        tplBridge({ op: "tags", tags: fields.tags || "" }, () => onDone(true));
+      });
+    }
+
+    function setType() {
+      if (fields.typeLabel) {
+        if (!selectTypeByLabel(typeSelect, fields.typeLabel)) return false;
+      } else {
+        typeSelect.selectedIndex = 0;
+        typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      return true;
+    }
+
+    if (!setType()) {
+      onDone(false);
+      return;
+    }
+    if (!fields.subtypeLabel) {
+      finish();
+      return;
+    }
+    selectPmiSubtypeByLabel(
+      subtypeSelect,
+      fields.subtypeLabel,
+      PMI_SUBTYPE_POLL_TIMEOUT_MS,
+      (ok) => (ok ? finish() : onDone(false))
+    );
+  }
+
+  function showTemplateStrip(message, undoable) {
+    const wrap = document.querySelector(".my-tpl-wrap");
+    if (!wrap) return;
+    let strip = document.querySelector(".my-tpl-strip");
+    if (!strip) {
+      strip = document.createElement("div");
+      strip.className = "my-tpl-strip";
+      strip.setAttribute("role", "status");
+      wrap.insertAdjacentElement("afterend", strip);
+    }
+    strip.textContent = "";
+    const text = document.createElement("span");
+    text.textContent = message;
+    strip.appendChild(text);
+    if (undoable && tplUndoSnapshot) {
+      const undo = document.createElement("button");
+      undo.type = "button";
+      undo.className = "my-tpl-strip-undo";
+      undo.textContent = "Undo";
+      undo.addEventListener("click", () => {
+        const snap = tplUndoSnapshot;
+        tplUndoSnapshot = null;
+        if (!snap) return;
+        applyTemplateFields(snap, (ok) =>
+          showTemplateStrip(
+            ok ? "Restored what was there before." : "Couldn't restore the previous note.",
+            false
+          )
+        );
+      });
+      strip.appendChild(undo);
+    }
+  }
+
+  function applyPastoralTemplate(template) {
+    readTemplateForm((before) => {
+      tplUndoSnapshot = before.ok ? before : null;
+      applyTemplateFields(template, (ok) => {
+        if (!ok) {
+          showTemplateStrip(
+            "Couldn't apply “" + template.name + "”. Check the Type and Sub-type still exist.",
+            !!tplUndoSnapshot
+          );
+          return;
+        }
+        showTemplateStrip("Applied “" + template.name + "”. Student tokens fill in when you save.", true);
+      });
+    });
+  }
+
+  function saveCurrentAsTemplate(name, onDone) {
+    readTemplateForm((form) => {
+      if (!form.ok) {
+        onDone("Couldn't read the note editor.");
+        return;
+      }
+      if (!form.html.replace(/<[^>]*>|&nbsp;|\s/g, "")) {
+        onDone("The General note is empty.");
+        return;
+      }
+      loadPastoralTemplates((list) => {
+        if (list.length >= TEMPLATES_MAX) {
+          onDone("You have " + TEMPLATES_MAX + " templates already. Delete one first.");
+          return;
+        }
+        if (list.some((t) => t.name.trim().toLowerCase() === name.trim().toLowerCase())) {
+          onDone("A template called “" + name.trim() + "” already exists.");
+          return;
+        }
+        list.push({
+          id: "t" + Date.now(),
+          name: name.trim(),
+          typeLabel: form.typeLabel,
+          subtypeLabel: form.subtypeLabel,
+          title: form.title,
+          points: form.points,
+          tags: form.tags,
+          html: form.html,
+          ts: Date.now(),
+        });
+        storePastoralTemplates(list, (ok) =>
+          onDone(ok ? null : "Couldn't save. Chrome storage is full or unavailable.")
+        );
+      });
+    });
+  }
+
+  function buildTemplatesButton() {
+    if (document.querySelector(".my-tpl-wrap")) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "my-tpl-wrap";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "my-tpl-button";
+    button.setAttribute("aria-haspopup", "true");
+    button.setAttribute("aria-expanded", "false");
+    button.textContent = "Templates ▾";
+
+    const panel = document.createElement("div");
+    panel.className = "my-tpl-panel";
+    panel.hidden = true;
+
+    function close() {
+      panel.hidden = true;
+      button.setAttribute("aria-expanded", "false");
+    }
+
+    function renderPanel() {
+      panel.textContent = "";
+      loadPastoralTemplates((list) => {
+        const head = document.createElement("div");
+        head.className = "my-tpl-head";
+        head.textContent = list.length ? "Your templates" : "No templates yet";
+        panel.appendChild(head);
+
+        list.forEach((t) => {
+          const item = document.createElement("button");
+          item.type = "button";
+          item.className = "my-tpl-item";
+          const name = document.createElement("span");
+          name.className = "my-tpl-item-name";
+          name.textContent = t.name;
+          const meta = document.createElement("span");
+          meta.className = "my-tpl-item-meta";
+          meta.textContent = [t.typeLabel, t.subtypeLabel].filter(Boolean).join(" › ");
+          item.append(name, meta);
+          item.addEventListener("click", () => {
+            close();
+            applyPastoralTemplate(t);
+          });
+          panel.appendChild(item);
+        });
+
+        const save = document.createElement("button");
+        save.type = "button";
+        save.className = "my-tpl-save";
+        save.textContent = "Save current note as template…";
+        save.addEventListener("click", () => {
+          save.hidden = true;
+          const form = document.createElement("div");
+          form.className = "my-tpl-name-form";
+          const input = document.createElement("input");
+          input.type = "text";
+          input.maxLength = 60;
+          input.placeholder = "Template name";
+          input.setAttribute("aria-label", "Template name");
+          const msg = document.createElement("div");
+          msg.className = "my-tpl-msg";
+          msg.setAttribute("role", "status");
+          const go = document.createElement("button");
+          go.type = "button";
+          go.textContent = "Save";
+          const cancel = document.createElement("button");
+          cancel.type = "button";
+          cancel.textContent = "Cancel";
+          cancel.addEventListener("click", renderPanel);
+          go.addEventListener("click", () => {
+            if (!input.value.trim()) {
+              msg.textContent = "Give it a name.";
+              return;
+            }
+            saveCurrentAsTemplate(input.value, (error) => {
+              if (error) {
+                msg.textContent = error;
+                return;
+              }
+              close();
+              showTemplateStrip("Saved “" + input.value.trim() + "” as a template.", false);
+            });
+          });
+          input.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              go.click();
+            }
+          });
+          form.append(input, go, cancel, msg);
+          panel.appendChild(form);
+          input.focus();
+        });
+        panel.appendChild(save);
+      });
+    }
+
+    button.addEventListener("click", () => {
+      if (panel.hidden) {
+        renderPanel();
+        panel.hidden = false;
+        button.setAttribute("aria-expanded", "true");
+      } else {
+        close();
+      }
+    });
+    document.addEventListener("click", (event) => {
+      if (!wrap.contains(event.target)) close();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !panel.hidden) {
+        close();
+        button.focus();
+      }
+    });
+
+    wrap.append(button, panel);
+
+    const anchor =
+      document.querySelector(".my-tweak-commend-button") ||
+      document.querySelector(".my-pastoral-history-toggle");
+    if (anchor && anchor.parentNode) {
+      anchor.insertAdjacentElement("afterend", wrap);
+      return;
+    }
+    const heading = document.querySelector("h1");
+    const anchorRow = heading ? heading.closest(".row") || heading : null;
+    if (anchorRow && anchorRow.parentNode) {
+      anchorRow.parentNode.insertBefore(wrap, anchorRow.nextSibling);
+    } else {
+      const content = document.querySelector("#content") || document.body;
+      content.insertBefore(wrap, content.firstChild);
+    }
+  }
+
+  function addPastoralTemplates() {
+    if (!isPastoralRecordInsertPage()) return;
+    buildTemplatesButton();
   }
 
   // ---------------------------------------------------------------

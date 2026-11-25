@@ -2127,3 +2127,100 @@ body.my-status-grid .my-grid-row input[name="mark"].my-grid-bad { border-color: 
 /* Once Schoolbox marks a row published it hides Publish through its own
    stylesheet; the button style above forced it back on with !important. */
 .my-grid-status .component-action[data-published] a.button[data-draft="publish"] { display: none !important; }
+
+/* Pastoral note Templates */
+.my-tpl-wrap {
+  position: relative;
+  display: inline-block;
+  margin: 0 0 12px 8px;
+  vertical-align: top;
+}
+.my-tpl-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 0.9em;
+  border: 1px solid rgb(21, 82, 107);
+  border-radius: 4px;
+  background: rgb(21, 82, 107);
+  color: #fff;
+  cursor: pointer;
+}
+.my-tpl-button:hover { background: rgb(13, 58, 77); }
+.my-tpl-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  width: 340px;
+  max-width: 90vw;
+  background: #fff;
+  border: 1px solid #c9cfd8;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(21, 26, 33, 0.18);
+  overflow: hidden;
+}
+.my-tpl-panel[hidden] { display: none; }
+.my-tpl-head {
+  padding: 10px 14px;
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #5e6672;
+}
+.my-tpl-item,
+.my-tpl-save {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 0;
+  border-top: 1px solid #e2e5e9;
+  background: #fff;
+  color: #1f2933;
+  text-align: left;
+  cursor: pointer;
+}
+.my-tpl-item:hover,
+.my-tpl-save:hover { background: #eef5f8; }
+.my-tpl-item-name { font-weight: 700; }
+.my-tpl-item-meta { font-size: 0.85em; color: #5e6672; }
+.my-tpl-save { font-weight: 700; color: rgb(21, 82, 107); }
+.my-tpl-name-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  border-top: 1px solid #e2e5e9;
+}
+.my-tpl-name-form input { flex: 1 1 100%; margin: 0; }
+.my-tpl-name-form button { min-height: 36px; }
+.my-tpl-msg { flex: 1 1 100%; font-size: 0.85em; color: #c62828; }
+.my-tpl-msg:empty { display: none; }
+.my-tpl-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  font-size: 0.9em;
+  background: #eef5f8;
+  border: 1px solid #bfd6df;
+  border-radius: 4px;
+}
+.my-tpl-strip-undo {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: rgb(21, 82, 107);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
