@@ -39,3 +39,10 @@ On the new pastoral record page, **Templates** saves and re-applies your own not
 - **Manage:** **Templates → Manage templates** to rename, delete, or export/import as text to share with a colleague.
 - **Never saved:** the Confidential note, the date, and the student.
 - **Where they live:** your Chrome profile (`chrome.storage.sync`), one item per template, up to 50, about 7KB each. Turn the feature off under *Pastoral records* in Settings. Terms are defined in `../GLOSSARY.md`.
+
+## Timetable page
+
+- **Class buttons**: hover or Tab to a lesson on `/timetable` for Class List, Markbook and Go to class. The ⋯ button opens the class's Course page, found by reading the class page once on first hover and remembering it (stored in the browser's local storage as `myClassCourseLinks`).
+- **My duties**: duties added in the nav panel's My duties section also show on the Timetable week and day views. Before and after school duties appear as a line above the day.
+
+Each has its own toggle under "Timetable page" in the settings.

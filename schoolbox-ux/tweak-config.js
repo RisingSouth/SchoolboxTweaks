@@ -192,11 +192,13 @@ const TWEAK_GROUPS = [
     tweaks: [
       {
         id: "timetablePageClassButtons",
+        since: "1.2.12",
         label: "Class buttons on the Timetable page",
         description: "Class List, Markbook and Go to class icons on each lesson (hover or Tab to a lesson to show them)",
       },
       {
         id: "timetablePageDuties",
+        since: "1.2.12",
         label: "My duties on the Timetable page",
         description: "Shows your weekly duties (added in the My duties panel) on the Timetable page's week and day views",
       },
@@ -255,15 +257,15 @@ const TWEAK_GROUPS = [
 // ---------------------------------------------------------------
 const CHANGELOG = [
   {
-    version: "1.2.11",
+    version: "1.2.12",
     items: [
       {
-        title: "Templates for pastoral notes",
-        text: "New Templates button on the new-record form. After you save a record you can keep the note as a template (student names become tokens), then apply, rename, delete, export or import templates later. Your own list; the Confidential note is never saved. Turn it off in the Pastoral records group.",
+        title: "Class buttons on the Timetable page",
+        text: "Hover (or Tab to) a lesson on the Timetable page for Class List, Markbook and Go to class. The ⋯ button opens the class's Course page. The same Go to class and Course page buttons now appear on the home page timetable. Turn it off in the Timetable page group.",
       },
       {
-        title: "Cancelled lessons and room changes",
-        text: "After \"Check relief\", cancelled lessons and room swaps are marked on the dashboard timetable. Edval events now also appear in the relief list.",
+        title: "My duties on the Timetable page",
+        text: "Your duties now show on the Timetable week and day views, including before and after school. The My duties panel is easier to use: pick several days at once, edit a duty in place, and confirm before deleting.",
       },
     ],
   },
