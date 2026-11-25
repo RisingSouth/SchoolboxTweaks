@@ -2228,3 +2228,13 @@ body.my-status-grid .my-grid-row input[name="mark"].my-grid-bad { border-color: 
 .my-tpl-list [hidden] { display: none; }
 .my-tpl-search { display: block; width: calc(100% - 28px); margin: 0 14px 8px; }
 .my-tpl-none { padding: 10px 14px; font-size: 0.9em; color: #5e6672; border-top: 1px solid #e2e5e9; }
+/* Use the page's own font, not the browser's default button/input font */
+.my-tpl-button,
+.my-tpl-item,
+.my-tpl-save,
+.my-tpl-strip-undo,
+.my-tpl-name-form input,
+.my-tpl-name-form button,
+.my-tpl-search {
+  font-family: inherit;
+}
