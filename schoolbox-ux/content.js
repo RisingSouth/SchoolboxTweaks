@@ -4711,7 +4711,7 @@ Once you have both, map each criterion to the correct capability, build the CSV,
           (copied
             ? "Prompt copied. "
             : "Couldn't copy the prompt - open the AI and paste it manually. ") +
-          "Attach your rubric there, ask for the CSV, then use \"Upload a Schoolbox format file\" below.";
+          "Attach your rubric there, ask for the CSV, then use \"Upload a Schoolbox format file\" above.";
         const url = platform.param
           ? platform.url + "?" + platform.param + "=" + encodeURIComponent(RUBRIC_AI_PROMPT)
           : platform.url;
