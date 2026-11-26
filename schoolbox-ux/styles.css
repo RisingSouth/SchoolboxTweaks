@@ -2470,7 +2470,8 @@ a.fc-timegrid-event.fc-timegrid-event-short .my-tt-links { top: 100%; }
   margin: 0 0.75rem 0 0;
 }
 .my-asu-status {
-  display: inline-block;
+  display: block;
+  margin-top: 0.4rem;
   font-size: 0.9rem;
   color: #b3261e;
 }
@@ -2482,4 +2483,30 @@ input.my-asu-missing,
   outline: 2px solid #d93025;
   outline-offset: 1px;
   background-color: #fdecea;
+}
+
+.my-asu-status .my-asu-needed { color: #b3261e; }
+.my-asu-status .my-asu-done { color: #1b6e3a; }
+.my-asu-status .my-asu-checking { color: #8a5a00; }
+select.my-asu-check,
+.ck-editor.my-asu-check {
+  outline: 2px solid #f0a000;
+  outline-offset: 1px;
+  background-color: #fff7e0;
+}
+.my-rubric-ai-wrap {
+  margin: 0 0 1rem;
+}
+.my-rubric-ai-button {
+  margin: 0 0.5rem 0 0;
+}
+.my-rubric-ai-select {
+  display: inline-block;
+  width: auto;
+  margin: 0;
+}
+.my-rubric-ai-note {
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
+  color: #444;
 }

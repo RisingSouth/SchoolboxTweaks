@@ -210,6 +210,12 @@ const TWEAK_GROUPS = [
         label: "Autofill assessment setup",
         description: "\"Autofill assessment setup\" button on the new Due Work form: sets the standard summative settings and highlights what you still need to enter",
       },
+      {
+        id: "assessmentRubricAi",
+        since: "1.2.12",
+        label: "Rubric file with AI",
+        description: "\"Make a rubric file with AI\" button in the Grading section: copies a ready-made prompt and opens the AI site you choose, to turn your rubric into a Schoolbox import file",
+      },
     ],
   },
   {
@@ -297,7 +303,11 @@ const CHANGELOG = [
     items: [
       {
         title: "Autofill assessment setup",
-        text: "New button under Title on the new Due Work form. It sets Summative Assessment Task, Common Assessment off, Dual Mark Types on (Total Mark in, Percentage out) and Feedback Visibility to Staff Only, then highlights Title, Description, Weight and Maximum Available Marks until you fill them in. It never clicks Create. Turn it off in the Assessments group.",
+        text: "New button under Title on the new Due Work form. It sets Summative Assessment Task, Common Assessment off, Dual Mark Types on (Total Mark in, Percentage out) and Feedback Visibility to Staff Only, then highlights Title, Weight and Maximum Available Marks in red until you fill them in, and Description, Accepts Online Submissions and Self-reflection in amber as things worth checking. It never clicks Create. Turn it off in the Assessments group.",
+      },
+      {
+        title: "Rubric file with AI",
+        text: "New button in the Grading section of the assessment form. It copies a ready-made prompt, opens your chosen AI (Claude, ChatGPT, Copilot or Gemini) and tells you to attach your rubric there. The AI gives you a CSV to import with \"Upload a Schoolbox format file\". Turn it off in the Assessments group.",
       },
     ],
   },

@@ -64,6 +64,7 @@
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
     if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
     if (tweakToggles.assessmentSetupAutofill) addAssessmentSetupAutofill();
+    if (tweakToggles.assessmentRubricAi) addRubricAiButton();
     if (tweakToggles.pastoralRecordHistoryPanel) addPastoralRecordHistoryPanel();
     if (tweakToggles.pastoralPmiStepback) addPmiStepbackHelper();
     if (tweakToggles.pastoralCommendation) addCommendationHelper();
@@ -4305,18 +4306,19 @@
       return ed.textContent.replace(/​/g, "").trim() === "";
     }
 
+    // Online submission and Self-reflection are "check" items: their
+    // default (None) is often the right answer, so they stay amber
+    // until the teacher touches the control, whatever they pick.
+    let onlineTouched = false;
+    let selfTouched = false;
+
+    // Red: must be entered by the teacher.
     function fields() {
-      const desc = descriptionEditable();
       return [
         {
           name: "Title",
           el: titleInput,
           missing: () => titleInput.value.trim() === "",
-        },
-        {
-          name: "Description",
-          el: desc ? desc.closest(".ck-editor") : null,
-          missing: descriptionIsEmpty,
         },
         {
           name: "Weight",
@@ -4334,22 +4336,58 @@
       ];
     }
 
+    // Amber: not required, but worth a look before Create.
+    function checks() {
+      const desc = descriptionEditable();
+      return [
+        {
+          name: "Description",
+          el: desc ? desc.closest(".ck-editor") : null,
+          missing: descriptionIsEmpty,
+        },
+        {
+          name: "Accepts Online Submissions (currently None)",
+          el: part2.querySelector("#acceptOnline"),
+          missing: () => !onlineTouched,
+        },
+        {
+          name: "Self-reflection (currently None)",
+          el: part2.querySelector('select[name="self_reviewable"]'),
+          missing: () => !selfTouched,
+        },
+      ];
+    }
+
     function refresh() {
       const needed = [];
+      const toCheck = [];
       fields().forEach((f) => {
         if (!f.el) return;
         const missing = armed && f.missing();
         f.el.classList.toggle("my-asu-missing", missing);
         if (missing) needed.push(f.name);
       });
-      if (!armed) {
-        status.textContent = "";
-      } else if (needed.length) {
-        status.textContent = "Still needed: " + needed.join(", ");
-        status.classList.remove("my-asu-done");
+      checks().forEach((f) => {
+        if (!f.el) return;
+        const flag = armed && f.missing();
+        f.el.classList.toggle("my-asu-check", flag);
+        if (flag) toCheck.push(f.name);
+      });
+      status.textContent = "";
+      if (!armed) return;
+      const addLine = (text, cls) => {
+        const line = document.createElement("div");
+        line.className = cls;
+        line.textContent = text;
+        status.appendChild(line);
+      };
+      if (needed.length) {
+        addLine("Still needed: " + needed.join(", "), "my-asu-needed");
       } else {
-        status.textContent = "Nothing left to fill in. Check Submissions and Self-reflection, then Create.";
-        status.classList.add("my-asu-done");
+        addLine("All required fields filled in.", "my-asu-done");
+      }
+      if (toCheck.length) {
+        addLine("Worth checking: " + toCheck.join(", "), "my-asu-checking");
       }
     }
 
@@ -4362,6 +4400,8 @@
     });
     form.addEventListener("change", (event) => {
       if (event.target === weightInput()) weightTouched = true;
+      if (event.target.id === "acceptOnline") onlineTouched = true;
+      if (event.target.name === "self_reviewable") selfTouched = true;
       refresh();
     });
     const editable = descriptionEditable();
@@ -4434,6 +4474,145 @@
       refresh();
       // Schoolbox's plugin may re-render rows after our events.
       setTimeout(verifyAssessmentAutofill, 250);
+    });
+  }
+
+  // The text a teacher sends to an AI assistant, together with their
+  // own rubric, to get a CSV Schoolbox can import ("Upload a
+  // Schoolbox format file" in the Grading section). Contains no
+  // student or school data.
+  const RUBRIC_AI_PROMPT = `I need help converting rubrics into Schoolbox-compatible CSV files for import.
+
+Here is how the Schoolbox CSV format works:
+
+Row 1 — Global Settings
+"capabilityMarkType: raw","useMarkRange: Off",,,,,
+
+Row 2 — Criterion Header Row
+- Col 1: Capability name
+- Col 2: Sub-criterion name
+- Col 3 onwards: Descriptor text for each performance level, highest to lowest
+
+Row 3 — Marks Row
+- Col 1: Total marks for the capability
+- Col 2: Blank
+- Col 3 onwards: Point values corresponding to each descriptor, highest to lowest
+
+Additional sub-criteria under the same capability have Col 1 left blank.
+
+Key rules:
+- Col 1 blank = same capability as above
+- Descriptor columns can be left blank if fewer performance levels are used
+- Marks row always follows directly after its descriptor row
+- Performance levels run highest to lowest, left to right
+- Always provide a downloadable CSV file when done
+
+Example:
+"capabilityMarkType: raw","useMarkRange: Off",,,,,,,,,,,
+"Capability Name","Sub-criterion","Excellent","Good","Satisfactory","Below standard","No Submission"
+10,,4,3,2,1,0
+"Second Capability","Sub-criterion","Excellent","Good","Satisfactory","Below standard","No Submission"
+10,,4,3,2,1,0
+,"Second sub-criterion","Excellent","Good","Satisfactory","Below standard","No Submission"
+,,4,3,2,1,0
+
+To get started, please ask me:
+1. For my capability names — if I don't have a list, help me generate one from my rubric or subject area
+2. For the rubric I want converted — I will paste it as text or upload a PDF
+
+Once you have both, map each criterion to the correct capability, build the CSV, and provide a downloadable file.`;
+
+  // url: where to open; prefill: whether that site accepts the prompt
+  // in the address (otherwise the prompt is only copied to the
+  // clipboard to paste). The prefill parameters are NOT confirmed
+  // live for every site - the clipboard copy is the fallback.
+  const RUBRIC_AI_PLATFORMS = {
+    claude: { label: "Claude", url: "https://claude.ai/new", param: "q" },
+    chatgpt: { label: "ChatGPT", url: "https://chatgpt.com/", param: "q" },
+    copilot: { label: "Copilot", url: "https://copilot.microsoft.com/", param: "q" },
+    gemini: { label: "Gemini", url: "https://gemini.google.com/app", param: null },
+  };
+
+  // Grading section of the new-assessment form: a button (and a
+  // platform picker, remembered in chrome.storage.sync) that copies
+  // the prompt above and opens the chosen AI site. Placed just before
+  // #rubric-builder-container, not inside it: that container is
+  // rendered by Vue, which would discard anything added inside.
+  function addRubricAiButton() {
+    const container = document.getElementById("rubric-builder-container");
+    if (!container || !container.parentElement) return;
+    if (document.getElementById("my-rubric-ai-wrap")) return;
+
+    const wrap = document.createElement("div");
+    wrap.id = "my-rubric-ai-wrap";
+    wrap.className = "my-rubric-ai-wrap";
+
+    const select = document.createElement("select");
+    select.className = "my-rubric-ai-select";
+    select.setAttribute("aria-label", "AI assistant");
+    Object.keys(RUBRIC_AI_PLATFORMS).forEach((key) => {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.textContent = RUBRIC_AI_PLATFORMS[key].label;
+      select.appendChild(opt);
+    });
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button small my-rubric-ai-button";
+    button.textContent = "Make a rubric file with AI";
+
+    const note = document.createElement("div");
+    note.className = "my-rubric-ai-note";
+
+    wrap.appendChild(button);
+    wrap.appendChild(select);
+    wrap.appendChild(note);
+    container.insertAdjacentElement("beforebegin", wrap);
+
+    try {
+      chrome.storage.sync.get({ rubricAiPlatform: "claude" }, (result) => {
+        if (RUBRIC_AI_PLATFORMS[result.rubricAiPlatform]) {
+          select.value = result.rubricAiPlatform;
+        }
+      });
+    } catch (err) {
+      // Storage unavailable: the picker just defaults to Claude.
+    }
+
+    select.addEventListener("change", () => {
+      try {
+        chrome.storage.sync.set({ rubricAiPlatform: select.value });
+      } catch (err) {
+        // Not remembered; harmless.
+      }
+    });
+
+    button.addEventListener("click", () => {
+      const platform = RUBRIC_AI_PLATFORMS[select.value];
+      let copied = false;
+      const finish = () => {
+        note.textContent =
+          (copied
+            ? "Prompt copied. "
+            : "Couldn't copy the prompt - open the AI and paste it manually. ") +
+          "Attach your rubric there, ask for the CSV, then use \"Upload a Schoolbox format file\" below.";
+        const url = platform.param
+          ? platform.url + "?" + platform.param + "=" + encodeURIComponent(RUBRIC_AI_PROMPT)
+          : platform.url;
+        window.open(url, "_blank", "noopener");
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(RUBRIC_AI_PROMPT).then(
+          () => {
+            copied = true;
+            finish();
+          },
+          finish
+        );
+      } else {
+        finish();
+      }
     });
   }
 
