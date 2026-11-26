@@ -4878,7 +4878,8 @@ Once you have both, map each criterion to the correct capability, build the CSV,
   };
 
   // Grading section of the new-assessment form: a quiet line of text
-  // under the Create manually / Upload buttons. The first time it
+  // under the Create manually / Upload buttons (shown only after "Add a
+  // rubric" is pressed). The first time it
   // reads "Convert it with AI" and opens a short list of assistants;
   // after one is used it reads "Convert it with <name>" (one click)
   // with a small caret to pick a different one. The choice is kept in
@@ -4889,7 +4890,18 @@ Once you have both, map each criterion to the correct capability, build the CSV,
   function addRubricAiButton() {
     const container = document.getElementById("rubric-builder-container");
     if (!container || !container.parentElement) return;
-    if (document.getElementById("my-rubric-ai-wrap")) return;
+    // Only once the teacher has pressed "Add a rubric": that is when
+    // Schoolbox shows the Create manually / Upload buttons this sits
+    // under. Gone again if the rubric is removed or built by hand.
+    const hasChooser = !!container.querySelector(
+      '[data-test="rubric-create-manually"]'
+    );
+    const existing = document.getElementById("my-rubric-ai-wrap");
+    if (!hasChooser) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) return;
 
     const wrap = document.createElement("div");
     wrap.id = "my-rubric-ai-wrap";
