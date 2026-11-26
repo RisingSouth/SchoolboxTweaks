@@ -202,6 +202,17 @@ const TWEAK_GROUPS = [
     ],
   },
   {
+    name: "Assessments",
+    tweaks: [
+      {
+        id: "assessmentSetupAutofill",
+        since: "1.2.12",
+        label: "Autofill assessment setup",
+        description: "\"Autofill assessment setup\" button on the new Due Work form: sets the standard summative settings and highlights what you still need to enter",
+      },
+    ],
+  },
+  {
     name: "Timetable page",
     tweaks: [
       {
@@ -281,6 +292,15 @@ const TWEAK_GROUPS = [
 // Entries are highlights grouped by feature, not one per commit.
 // ---------------------------------------------------------------
 const CHANGELOG = [
+  {
+    version: "1.2.12",
+    items: [
+      {
+        title: "Autofill assessment setup",
+        text: "New button under Title on the new Due Work form. It sets Summative Assessment Task, Common Assessment off, Dual Mark Types on (Total Mark in, Percentage out) and Feedback Visibility to Staff Only, then highlights Title, Description, Weight and Maximum Available Marks until you fill them in. It never clicks Create. Turn it off in the Assessments group.",
+      },
+    ],
+  },
   {
     version: "1.2.11",
     items: [

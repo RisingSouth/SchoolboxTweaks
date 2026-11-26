@@ -63,6 +63,7 @@
     if (tweakToggles.dashboardTimetableChanges) addTimetableChangesToStrip();
     if (tweakToggles.courseImportUnitDates) addUnitDateCopyButton();
     if (tweakToggles.courseImportLessonCascade) addLessonDateCascade();
+    if (tweakToggles.assessmentSetupAutofill) addAssessmentSetupAutofill();
     if (tweakToggles.pastoralRecordHistoryPanel) addPastoralRecordHistoryPanel();
     if (tweakToggles.pastoralPmiStepback) addPmiStepbackHelper();
     if (tweakToggles.pastoralCommendation) addCommendationHelper();
@@ -4230,6 +4231,209 @@
         setDateInputValue(openInput, firstOpen.value);
         setDateInputValue(closeInput, firstClose.value);
       });
+    });
+  }
+
+  // New assessment form (form#assessmentForm). It is a two-step
+  // wizard: part 1 picks the activity type, then part 2 (the real
+  // form) appears. This only runs on part 2 of a Due Work. The button
+  // under Title sets the standard summative settings and highlights
+  // the four fields only the teacher can fill in. Submissions,
+  // Self-reflection, Curriculum Codes and Duration are deliberately
+  // left alone, and it never clicks Create.
+  //
+  // Each fieldset's native controls are driven with real events
+  // (click / change) rather than by setting .value alone, because
+  // Schoolbox's own jQuery plugin (jquery.markType-gradingScheme.js)
+  // is what reveals the Display Mark Type row and the Maximum
+  // Available Marks box - a bare .value write would leave them hidden.
+  //
+  // NOT confirmed live: that firing those events in this order
+  // reveals the rows and keeps the values. verifyAssessmentAutofill()
+  // re-checks after a short delay and logs a warning only if
+  // something did not stick.
+  function addAssessmentSetupAutofill() {
+    const form = document.getElementById("assessmentForm");
+    if (!form) return;
+    const part2 = form.querySelector('fieldset[data-mage="part-2"]');
+    if (!part2) return;
+    const typeInput = part2.querySelector('input[name="assessmentType"]');
+    if (!typeInput || typeInput.value !== "dueWork") return;
+
+    const titleInput = part2.querySelector("#title");
+    if (!titleInput) return;
+    if (document.getElementById("my-asu-wrap")) return;
+
+    const wrap = document.createElement("div");
+    wrap.id = "my-asu-wrap";
+    wrap.className = "my-asu-wrap";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button small my-asu-button";
+    button.textContent = "Autofill assessment setup";
+
+    const status = document.createElement("div");
+    status.className = "my-asu-status";
+    status.setAttribute("aria-live", "polite");
+
+    wrap.appendChild(button);
+    wrap.appendChild(status);
+    titleInput.insertAdjacentElement("afterend", wrap);
+
+    let armed = false;
+    // Weight is highlighted until the teacher edits it (its page
+    // default of 0 can be a real answer); the others are highlighted
+    // while empty.
+    let weightTouched = false;
+
+    function weightInput() {
+      return part2.querySelector('input[name="weight"]');
+    }
+    function maxMarkInput() {
+      return part2.querySelector("#instructor-maxMark");
+    }
+    function descriptionEditable() {
+      const ta = part2.querySelector("#assessment-description");
+      const root = ta ? ta.nextElementSibling : null;
+      return root ? root.querySelector(".ck-editor__editable") : null;
+    }
+    function descriptionIsEmpty() {
+      const ed = descriptionEditable();
+      if (!ed) return false; // editor not mounted: don't claim anything
+      if (ed.querySelector("img, table, li, iframe")) return false;
+      return ed.textContent.replace(/​/g, "").trim() === "";
+    }
+
+    function fields() {
+      const desc = descriptionEditable();
+      return [
+        {
+          name: "Title",
+          el: titleInput,
+          missing: () => titleInput.value.trim() === "",
+        },
+        {
+          name: "Description",
+          el: desc ? desc.closest(".ck-editor") : null,
+          missing: descriptionIsEmpty,
+        },
+        {
+          name: "Weight",
+          el: weightInput(),
+          missing: () => !weightTouched,
+        },
+        {
+          name: "Maximum Available Marks",
+          el: maxMarkInput(),
+          missing: () => {
+            const el = maxMarkInput();
+            return !!el && el.value.trim() === "";
+          },
+        },
+      ];
+    }
+
+    function refresh() {
+      const needed = [];
+      fields().forEach((f) => {
+        if (!f.el) return;
+        const missing = armed && f.missing();
+        f.el.classList.toggle("my-asu-missing", missing);
+        if (missing) needed.push(f.name);
+      });
+      if (!armed) {
+        status.textContent = "";
+      } else if (needed.length) {
+        status.textContent = "Still needed: " + needed.join(", ");
+        status.classList.remove("my-asu-done");
+      } else {
+        status.textContent = "Nothing left to fill in. Check Submissions and Self-reflection, then Create.";
+        status.classList.add("my-asu-done");
+      }
+    }
+
+    // Live updates. Listeners on the form catch Title / Weight / Max
+    // Marks (input events bubble); the editor box is watched
+    // separately because CKEditor edits its own contenteditable.
+    form.addEventListener("input", (event) => {
+      if (event.target === weightInput()) weightTouched = true;
+      refresh();
+    });
+    form.addEventListener("change", (event) => {
+      if (event.target === weightInput()) weightTouched = true;
+      refresh();
+    });
+    const editable = descriptionEditable();
+    if (editable) {
+      new MutationObserver(refresh).observe(editable, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+      editable.addEventListener("keyup", refresh);
+    }
+
+    function fireChange(el) {
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    function setSelect(el, value) {
+      if (!el) return;
+      el.value = value;
+      fireChange(el);
+    }
+    // A switch is a hidden-ish checkbox driven by its label; click()
+    // on the input toggles it and fires the same events a real click
+    // does, which Schoolbox's handlers listen for.
+    function setSwitch(el, on) {
+      if (!el) return;
+      if (el.checked !== on) el.click();
+    }
+
+    function applyConstants() {
+      setSelect(part2.querySelector("#workTypeSelector"), "2"); // Summative Assessment Task
+      setSwitch(part2.querySelector("#courseManaged"), false); // Common Assessment off
+      setSwitch(part2.querySelector("#useDualMarkTypes"), true); // Dual Mark Types on
+      setSelect(part2.querySelector("#instructor-markType"), "3"); // Input: Total Mark
+      setSelect(part2.querySelector("#markType"), "1"); // Display: Percentage
+      setSelect(part2.querySelector('select[name="visibility"]'), "staffOnly"); // Feedback Visibility
+    }
+
+    // Failure-path logging only. If the plugin reset a value after
+    // our events, set it once more; warn if it still did not stick.
+    function verifyAssessmentAutofill() {
+      const checks = [
+        ["#workTypeSelector", "2"],
+        ["#instructor-markType", "3"],
+        ["#markType", "1"],
+        ['select[name="visibility"]', "staffOnly"],
+      ];
+      const bad = [];
+      checks.forEach(([sel, want]) => {
+        const el = part2.querySelector(sel);
+        if (!el) return bad.push(sel + " (missing)");
+        if (el.value !== want) {
+          el.value = want;
+          fireChange(el);
+          if (el.value !== want) bad.push(sel);
+        }
+      });
+      const dual = part2.querySelector("#useDualMarkTypes");
+      if (dual && !dual.checked) bad.push("#useDualMarkTypes");
+      const common = part2.querySelector("#courseManaged");
+      if (common && common.checked) bad.push("#courseManaged");
+      if (bad.length) {
+        console.warn("[UX tweaks] Autofill assessment setup: did not stick:", bad.join(", "));
+      }
+      refresh();
+    }
+
+    button.addEventListener("click", () => {
+      applyConstants();
+      armed = true;
+      refresh();
+      // Schoolbox's plugin may re-render rows after our events.
+      setTimeout(verifyAssessmentAutofill, 250);
     });
   }
 
