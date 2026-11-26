@@ -4510,8 +4510,28 @@
       document.removeEventListener("keydown", onKey, true);
       button.textContent = "Reopen setup wizard";
     }
+    // Enter goes to the next step (or skips / confirms). In the
+    // Description box Enter is a line break once something is typed,
+    // so there Ctrl/Cmd+Enter moves on; an empty box skips on Enter.
+    let currentNext = null;
     function onKey(event) {
-      if (event.key === "Escape") closeWizard();
+      if (event.key === "Escape") {
+        closeWizard();
+        return;
+      }
+      if (event.key !== "Enter" || !overlay || !currentNext) return;
+      const target = event.target;
+      if (!overlay.contains(target)) return;
+      if (target.tagName === "BUTTON") return; // native click
+      if (
+        target.tagName === "TEXTAREA" &&
+        target.value.trim() !== "" &&
+        !(event.ctrlKey || event.metaKey)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      currentNext.click();
     }
 
     function openWizard(step) {
@@ -4648,7 +4668,7 @@
           });
           modal.appendChild(edit);
         } else {
-          focusEl = textBox(true, W.desc, "What students need to know: the task, conditions, what to submit", (v) => {
+          focusEl = textBox(true, W.desc, "What students need to know: the task, conditions, what to submit (Ctrl+Enter for next)", (v) => {
             W.desc = v;
             W.descOwned = true;
             W.descSkipped = false;
@@ -4774,6 +4794,7 @@
         if (s === STEP_NAMES.length - 1) closeWizard();
         else go(s + 1);
       });
+      currentNext = nextBtn;
       right.appendChild(close);
       right.appendChild(nextBtn);
       footer.appendChild(back);
