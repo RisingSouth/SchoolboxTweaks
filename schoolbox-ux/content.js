@@ -4910,8 +4910,14 @@ Once you have both, map each criterion to the correct capability, build the CSV,
       menuOpen = false;
       render();
     }
+    // render() replaces the clicked button, so by the time the click
+    // reaches the document the target is detached from the page and
+    // wrap.contains() is false. Without the isConnected check that
+    // read as a click outside and closed the menu straight away.
     document.addEventListener("click", (event) => {
-      if (menuOpen && !wrap.contains(event.target)) closeMenu();
+      if (menuOpen && event.target.isConnected && !wrap.contains(event.target)) {
+        closeMenu();
+      }
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeMenu();
