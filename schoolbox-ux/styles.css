@@ -2469,15 +2469,6 @@ a.fc-timegrid-event.fc-timegrid-event-short .my-tt-links { top: 100%; }
 .my-asu-button {
   margin: 0 0.75rem 0 0;
 }
-.my-asu-status {
-  display: block;
-  margin-top: 0.4rem;
-  font-size: 0.9rem;
-  color: #b3261e;
-}
-.my-asu-status.my-asu-done {
-  color: #1b6e3a;
-}
 input.my-asu-missing,
 .ck-editor.my-asu-missing {
   outline: 2px solid #d93025;
@@ -2485,9 +2476,6 @@ input.my-asu-missing,
   background-color: #fdecea;
 }
 
-.my-asu-status .my-asu-needed { color: #b3261e; }
-.my-asu-status .my-asu-done { color: #1b6e3a; }
-.my-asu-status .my-asu-checking { color: #8a5a00; }
 select.my-asu-check,
 .ck-editor.my-asu-check {
   outline: 2px solid #f0a000;
@@ -2509,4 +2497,67 @@ select.my-asu-check,
   margin-top: 0.4rem;
   font-size: 0.9rem;
   color: #444;
+}
+
+.my-asu-review {
+  margin: 0;
+}
+.my-asu-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.my-asu-modal {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  width: min(30rem, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+.my-asu-modal h3 {
+  margin: 0 0 0.75rem;
+}
+.my-asu-modal-heading {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 1rem;
+}
+.my-asu-modal-heading.my-asu-needed { color: #b3261e; }
+.my-asu-modal-heading.my-asu-checking { color: #8a5a00; }
+.my-asu-modal-empty {
+  margin: 0 0 0.5rem;
+  color: #555;
+}
+.my-asu-modal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.my-asu-modal-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-left-width: 4px;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  margin: 0 0 0.4rem;
+  cursor: pointer;
+}
+.my-asu-modal-item.my-asu-needed { border-left-color: #d93025; }
+.my-asu-modal-item.my-asu-checking { border-left-color: #f0a000; }
+.my-asu-modal-item:hover { background: #f6f6f6; }
+.my-asu-modal-item span {
+  display: block;
+  font-size: 0.85rem;
+  color: #555;
+}
+.my-asu-modal-close {
+  margin: 0.75rem 0 0;
 }

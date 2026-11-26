@@ -4274,12 +4274,14 @@
     button.className = "button small my-asu-button";
     button.textContent = "Autofill assessment setup";
 
-    const status = document.createElement("div");
-    status.className = "my-asu-status";
-    status.setAttribute("aria-live", "polite");
+    // Shown after autofill: reopens the "what's left" list.
+    const reviewButton = document.createElement("button");
+    reviewButton.type = "button";
+    reviewButton.className = "button small secondary my-asu-review";
+    reviewButton.style.display = "none";
 
     wrap.appendChild(button);
-    wrap.appendChild(status);
+    wrap.appendChild(reviewButton);
     titleInput.insertAdjacentElement("afterend", wrap);
 
     let armed = false;
@@ -4317,16 +4319,22 @@
       return [
         {
           name: "Title",
+          hint: "Name it the assessment name.",
+          focusEl: titleInput,
           el: titleInput,
           missing: () => titleInput.value.trim() === "",
         },
         {
           name: "Weight",
+          hint: "Use the weighting from the assessment outline.",
+          focusEl: weightInput(),
           el: weightInput(),
           missing: () => !weightTouched,
         },
         {
           name: "Maximum Available Marks",
+          hint: "Total marks for the assessment (Grading section).",
+          focusEl: maxMarkInput(),
           el: maxMarkInput(),
           missing: () => {
             const el = maxMarkInput();
@@ -4342,20 +4350,119 @@
       return [
         {
           name: "Description",
+          hint: "Tell students about the assessment.",
+          focusEl: desc,
           el: desc ? desc.closest(".ck-editor") : null,
           missing: descriptionIsEmpty,
         },
         {
-          name: "Accepts Online Submissions (currently None)",
+          name: "Accepts Online Submissions",
+          hint: "Currently None (in-class). Turn on only if students submit on myCarey; then choose File.",
+          focusEl: part2.querySelector("#acceptOnline"),
           el: part2.querySelector("#acceptOnline"),
           missing: () => !onlineTouched,
         },
         {
-          name: "Self-reflection (currently None)",
+          name: "Self-reflection",
+          hint: "Currently None. Change to Self-reflection + Self-assessment if wanted.",
+          focusEl: part2.querySelector('select[name="self_reviewable"]'),
           el: part2.querySelector('select[name="self_reviewable"]'),
           missing: () => !selfTouched,
         },
       ];
+    }
+
+    let overlay = null;
+
+    function closeModal() {
+      if (!overlay) return;
+      overlay.remove();
+      overlay = null;
+      document.removeEventListener("keydown", onModalKey, true);
+    }
+    function onModalKey(event) {
+      if (event.key === "Escape") closeModal();
+    }
+
+    function goTo(item) {
+      closeModal();
+      const target = item.focusEl || item.el;
+      if (!target) return;
+      try {
+        target.scrollIntoView({ block: "center", behavior: "smooth" });
+        target.focus({ preventScroll: true });
+      } catch (err) {
+        // A hidden control can't be focused; scrolling is best effort.
+      }
+    }
+
+    function renderModalBody(body, needed, toCheck) {
+      body.textContent = "";
+      const addGroup = (title, cls, items, emptyText) => {
+        const h = document.createElement("h4");
+        h.className = "my-asu-modal-heading " + cls;
+        h.textContent = title;
+        body.appendChild(h);
+        if (!items.length) {
+          const p = document.createElement("p");
+          p.className = "my-asu-modal-empty";
+          p.textContent = emptyText;
+          body.appendChild(p);
+          return;
+        }
+        const ul = document.createElement("ul");
+        ul.className = "my-asu-modal-list";
+        items.forEach((item) => {
+          const li = document.createElement("li");
+          const link = document.createElement("button");
+          link.type = "button";
+          link.className = "my-asu-modal-item " + cls;
+          const name = document.createElement("strong");
+          name.textContent = item.name;
+          link.appendChild(name);
+          if (item.hint) {
+            const hint = document.createElement("span");
+            hint.textContent = item.hint;
+            link.appendChild(hint);
+          }
+          link.addEventListener("click", () => goTo(item));
+          li.appendChild(link);
+          ul.appendChild(li);
+        });
+        body.appendChild(ul);
+      };
+      addGroup("Fill in", "my-asu-needed", needed, "Everything required is filled in.");
+      addGroup("Worth checking", "my-asu-checking", toCheck, "Nothing else to check.");
+    }
+
+    function openModal() {
+      if (overlay) return;
+      overlay = document.createElement("div");
+      overlay.className = "my-asu-modal-overlay";
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) closeModal();
+      });
+      const modal = document.createElement("div");
+      modal.className = "my-asu-modal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-label", "Assessment setup: what's left");
+      const title = document.createElement("h3");
+      title.textContent = "Before you create this assessment";
+      const body = document.createElement("div");
+      body.className = "my-asu-modal-body";
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "button small my-asu-modal-close";
+      close.textContent = "Close";
+      close.addEventListener("click", closeModal);
+      modal.appendChild(title);
+      modal.appendChild(body);
+      modal.appendChild(close);
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      document.addEventListener("keydown", onModalKey, true);
+      refresh();
+      close.focus();
     }
 
     function refresh() {
@@ -4365,31 +4472,27 @@
         if (!f.el) return;
         const missing = armed && f.missing();
         f.el.classList.toggle("my-asu-missing", missing);
-        if (missing) needed.push(f.name);
+        if (missing) needed.push(f);
       });
       checks().forEach((f) => {
         if (!f.el) return;
         const flag = armed && f.missing();
         f.el.classList.toggle("my-asu-check", flag);
-        if (flag) toCheck.push(f.name);
+        if (flag) toCheck.push(f);
       });
-      status.textContent = "";
-      if (!armed) return;
-      const addLine = (text, cls) => {
-        const line = document.createElement("div");
-        line.className = cls;
-        line.textContent = text;
-        status.appendChild(line);
-      };
-      if (needed.length) {
-        addLine("Still needed: " + needed.join(", "), "my-asu-needed");
+      if (!armed) {
+        reviewButton.style.display = "none";
       } else {
-        addLine("All required fields filled in.", "my-asu-done");
+        reviewButton.style.display = "";
+        reviewButton.textContent =
+          "What's left (" + needed.length + " to fill in, " + toCheck.length + " to check)";
       }
-      if (toCheck.length) {
-        addLine("Worth checking: " + toCheck.join(", "), "my-asu-checking");
+      if (overlay) {
+        renderModalBody(overlay.querySelector(".my-asu-modal-body"), needed, toCheck);
       }
     }
+
+    reviewButton.addEventListener("click", openModal);
 
     // Live updates. Listeners on the form catch Title / Weight / Max
     // Marks (input events bubble); the editor box is watched
@@ -4466,6 +4569,7 @@
         console.warn("[UX tweaks] Autofill assessment setup: did not stick:", bad.join(", "));
       }
       refresh();
+      openModal();
     }
 
     button.addEventListener("click", () => {

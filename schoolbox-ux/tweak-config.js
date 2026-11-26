@@ -303,7 +303,7 @@ const CHANGELOG = [
     items: [
       {
         title: "Autofill assessment setup",
-        text: "New button under Title on the new Due Work form. It sets Summative Assessment Task, Common Assessment off, Dual Mark Types on (Total Mark in, Percentage out) and Feedback Visibility to Staff Only, then highlights Title, Weight and Maximum Available Marks in red until you fill them in, and Description, Accepts Online Submissions and Self-reflection in amber as things worth checking. It never clicks Create. Turn it off in the Assessments group.",
+        text: "New button under Title on the new Due Work form. It sets Summative Assessment Task, Common Assessment off, Dual Mark Types on (Total Mark in, Percentage out) and Feedback Visibility to Staff Only, then pops up a list of what you still need to fill in (red) and what is worth checking (amber): Description, Accepts Online Submissions and Self-reflection. Click an item to jump to it; a \"What's left\" button reopens the list. It never clicks Create. Turn it off in the Assessments group.",
       },
       {
         title: "Rubric file with AI",
