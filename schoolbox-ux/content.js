@@ -4237,22 +4237,83 @@
 
   // New assessment form (form#assessmentForm). It is a two-step
   // wizard: part 1 picks the activity type, then part 2 (the real
-  // form) appears. This only runs on part 2 of a Due Work. The button
-  // under Title sets the standard summative settings and highlights
-  // the four fields only the teacher can fill in. Submissions,
-  // Self-reflection, Curriculum Codes and Duration are deliberately
-  // left alone, and it never clicks Create.
+  // form) appears. This only runs on part 2 of a Due Work.
   //
-  // Each fieldset's native controls are driven with real events
-  // (click / change) rather than by setting .value alone, because
-  // Schoolbox's own jQuery plugin (jquery.markType-gradingScheme.js)
-  // is what reveals the Display Mark Type row and the Maximum
-  // Available Marks box - a bare .value write would leave them hidden.
+  // The button under Title sets the standard summative settings, then
+  // opens a step-by-step wizard (Title, Description, Weight, Maximum
+  // Available Marks, Online submission, Self-reflection, Summary) so
+  // the teacher doesn't have to scroll the whole page. Every value is
+  // written straight into Schoolbox's own field as it is entered, so
+  // the real form is always the single source of truth; "Confirm"
+  // just closes the wizard and leaves the filled-in page for the
+  // teacher to check and Create themselves. Nothing here ever clicks
+  // Create. Curriculum Codes, Duration and rubrics are left alone.
   //
-  // NOT confirmed live: that firing those events in this order
-  // reveals the rows and keeps the values. verifyAssessmentAutofill()
-  // re-checks after a short delay and logs a warning only if
-  // something did not stick.
+  // Native controls are driven with real events (click / change)
+  // rather than by setting .value alone, because Schoolbox's own
+  // jQuery plugin (jquery.markType-gradingScheme.js) is what reveals
+  // the Display Mark Type row and the Maximum Available Marks box.
+  //
+  // NOT confirmed live: (1) that firing those events in this order
+  // reveals the rows and keeps the values - verifyAssessmentAutofill()
+  // re-checks after a short delay and logs a warning only if something
+  // did not stick; (2) that main-world-bridge.js can write the
+  // Description through the page's CKEditor instance - the wizard
+  // shows a message and points at the page if it can't.
+  const ASU_BRIDGE_ID = "my-asu-bridge";
+  let asuRequestCounter = 0;
+
+  // One request to main-world-bridge.js (Description editor only).
+  function asuBridge(request, callback) {
+    let bridge = document.getElementById(ASU_BRIDGE_ID);
+    if (!bridge) {
+      bridge = document.createElement("div");
+      bridge.id = ASU_BRIDGE_ID;
+      bridge.hidden = true;
+      document.body.appendChild(bridge);
+    }
+    const id = "asu-" + Date.now() + "-" + ++asuRequestCounter;
+    let settled = false;
+    function onResponse() {
+      let res = null;
+      try {
+        res = JSON.parse(bridge.getAttribute("data-response") || "null");
+      } catch (err) {
+        res = null;
+      }
+      if (!res || res.id !== id || settled) return;
+      settled = true;
+      document.removeEventListener("my-asu-response", onResponse);
+      clearTimeout(timer);
+      callback(res);
+    }
+    document.addEventListener("my-asu-response", onResponse);
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("my-asu-response", onResponse);
+      callback({ ok: false, reason: "no-response" });
+    }, 4000);
+    bridge.setAttribute("data-request", JSON.stringify({ id, ...request }));
+    document.dispatchEvent(new Event("my-asu-request"));
+  }
+
+  function escapeAsuHtml(text) {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  // Plain text from the wizard's box becomes one paragraph per line.
+  function plainTextToEditorHtml(text) {
+    return String(text || "")
+      .split(/\r?\n/)
+      .filter((line) => line.trim() !== "")
+      .map((line) => "<p>" + escapeAsuHtml(line.trim()) + "</p>")
+      .join("");
+  }
+
   function addAssessmentSetupAutofill() {
     const form = document.getElementById("assessmentForm");
     if (!form) return;
@@ -4273,257 +4334,43 @@
     button.type = "button";
     button.className = "button small my-asu-button";
     button.textContent = "Autofill assessment setup";
-
-    // Shown after autofill: reopens the "what's left" list.
-    const reviewButton = document.createElement("button");
-    reviewButton.type = "button";
-    reviewButton.className = "button small secondary my-asu-review";
-    reviewButton.style.display = "none";
-
     wrap.appendChild(button);
-    wrap.appendChild(reviewButton);
     titleInput.insertAdjacentElement("afterend", wrap);
 
-    let armed = false;
-    // Weight is highlighted until the teacher edits it (its page
-    // default of 0 can be a real answer); the others are highlighted
-    // while empty.
-    let weightTouched = false;
+    const q = (sel) => part2.querySelector(sel);
+    const weightEl = () => q('input[name="weight"]');
+    const maxEl = () => q("#instructor-maxMark");
+    const onlineEl = () => q("#acceptOnline");
+    const selfEl = () => q('select[name="self_reviewable"]');
 
-    function weightInput() {
-      return part2.querySelector('input[name="weight"]');
-    }
-    function maxMarkInput() {
-      return part2.querySelector("#instructor-maxMark");
-    }
-    function descriptionEditable() {
-      const ta = part2.querySelector("#assessment-description");
+    function descEditable() {
+      const ta = q("#assessment-description");
       const root = ta ? ta.nextElementSibling : null;
       return root ? root.querySelector(".ck-editor__editable") : null;
     }
-    function descriptionIsEmpty() {
-      const ed = descriptionEditable();
-      if (!ed) return false; // editor not mounted: don't claim anything
-      if (ed.querySelector("img, table, li, iframe")) return false;
-      return ed.textContent.replace(/​/g, "").trim() === "";
+    function editorText() {
+      const ed = descEditable();
+      return ed ? ed.textContent.replace(/​/g, "").trim() : "";
+    }
+    function editorHasContent() {
+      const ed = descEditable();
+      if (!ed) return false;
+      if (ed.querySelector("img, table, li, iframe")) return true;
+      return editorText() !== "";
     }
 
-    // Online submission and Self-reflection are "check" items: their
-    // default (None) is often the right answer, so they stay amber
-    // until the teacher touches the control, whatever they pick.
-    let onlineTouched = false;
-    let selfTouched = false;
-
-    // Red: must be entered by the teacher.
-    function fields() {
-      return [
-        {
-          name: "Title",
-          hint: "Name it the assessment name.",
-          focusEl: titleInput,
-          el: titleInput,
-          missing: () => titleInput.value.trim() === "",
-        },
-        {
-          name: "Weight",
-          hint: "Use the weighting from the assessment outline.",
-          focusEl: weightInput(),
-          el: weightInput(),
-          missing: () => !weightTouched,
-        },
-        {
-          name: "Maximum Available Marks",
-          hint: "Total marks for the assessment (Grading section).",
-          focusEl: maxMarkInput(),
-          el: maxMarkInput(),
-          missing: () => {
-            const el = maxMarkInput();
-            return !!el && el.value.trim() === "";
-          },
-        },
-      ];
+    function fire(el, types) {
+      types.forEach((t) => el.dispatchEvent(new Event(t, { bubbles: true })));
     }
-
-    // Amber: not required, but worth a look before Create.
-    function checks() {
-      const desc = descriptionEditable();
-      return [
-        {
-          name: "Description",
-          hint: "Tell students about the assessment.",
-          focusEl: desc,
-          el: desc ? desc.closest(".ck-editor") : null,
-          missing: descriptionIsEmpty,
-        },
-        {
-          name: "Accepts Online Submissions",
-          hint: "Currently None (in-class). Turn on only if students submit on myCarey; then choose File.",
-          focusEl: part2.querySelector("#acceptOnline"),
-          el: part2.querySelector("#acceptOnline"),
-          missing: () => !onlineTouched,
-        },
-        {
-          name: "Self-reflection",
-          hint: "Currently None. Change to Self-reflection + Self-assessment if wanted.",
-          focusEl: part2.querySelector('select[name="self_reviewable"]'),
-          el: part2.querySelector('select[name="self_reviewable"]'),
-          missing: () => !selfTouched,
-        },
-      ];
-    }
-
-    let overlay = null;
-
-    function closeModal() {
-      if (!overlay) return;
-      overlay.remove();
-      overlay = null;
-      document.removeEventListener("keydown", onModalKey, true);
-    }
-    function onModalKey(event) {
-      if (event.key === "Escape") closeModal();
-    }
-
-    function goTo(item) {
-      closeModal();
-      const target = item.focusEl || item.el;
-      if (!target) return;
-      try {
-        target.scrollIntoView({ block: "center", behavior: "smooth" });
-        target.focus({ preventScroll: true });
-      } catch (err) {
-        // A hidden control can't be focused; scrolling is best effort.
-      }
-    }
-
-    function renderModalBody(body, needed, toCheck) {
-      body.textContent = "";
-      const addGroup = (title, cls, items, emptyText) => {
-        const h = document.createElement("h4");
-        h.className = "my-asu-modal-heading " + cls;
-        h.textContent = title;
-        body.appendChild(h);
-        if (!items.length) {
-          const p = document.createElement("p");
-          p.className = "my-asu-modal-empty";
-          p.textContent = emptyText;
-          body.appendChild(p);
-          return;
-        }
-        const ul = document.createElement("ul");
-        ul.className = "my-asu-modal-list";
-        items.forEach((item) => {
-          const li = document.createElement("li");
-          const link = document.createElement("button");
-          link.type = "button";
-          link.className = "my-asu-modal-item " + cls;
-          const name = document.createElement("strong");
-          name.textContent = item.name;
-          link.appendChild(name);
-          if (item.hint) {
-            const hint = document.createElement("span");
-            hint.textContent = item.hint;
-            link.appendChild(hint);
-          }
-          link.addEventListener("click", () => goTo(item));
-          li.appendChild(link);
-          ul.appendChild(li);
-        });
-        body.appendChild(ul);
-      };
-      addGroup("Fill in", "my-asu-needed", needed, "Everything required is filled in.");
-      addGroup("Worth checking", "my-asu-checking", toCheck, "Nothing else to check.");
-    }
-
-    function openModal() {
-      if (overlay) return;
-      overlay = document.createElement("div");
-      overlay.className = "my-asu-modal-overlay";
-      overlay.addEventListener("click", (event) => {
-        if (event.target === overlay) closeModal();
-      });
-      const modal = document.createElement("div");
-      modal.className = "my-asu-modal";
-      modal.setAttribute("role", "dialog");
-      modal.setAttribute("aria-label", "Assessment setup: what's left");
-      const title = document.createElement("h3");
-      title.textContent = "Before you create this assessment";
-      const body = document.createElement("div");
-      body.className = "my-asu-modal-body";
-      const close = document.createElement("button");
-      close.type = "button";
-      close.className = "button small my-asu-modal-close";
-      close.textContent = "Close";
-      close.addEventListener("click", closeModal);
-      modal.appendChild(title);
-      modal.appendChild(body);
-      modal.appendChild(close);
-      overlay.appendChild(modal);
-      document.body.appendChild(overlay);
-      document.addEventListener("keydown", onModalKey, true);
-      refresh();
-      close.focus();
-    }
-
-    function refresh() {
-      const needed = [];
-      const toCheck = [];
-      fields().forEach((f) => {
-        if (!f.el) return;
-        const missing = armed && f.missing();
-        f.el.classList.toggle("my-asu-missing", missing);
-        if (missing) needed.push(f);
-      });
-      checks().forEach((f) => {
-        if (!f.el) return;
-        const flag = armed && f.missing();
-        f.el.classList.toggle("my-asu-check", flag);
-        if (flag) toCheck.push(f);
-      });
-      if (!armed) {
-        reviewButton.style.display = "none";
-      } else {
-        reviewButton.style.display = "";
-        reviewButton.textContent =
-          "What's left (" + needed.length + " to fill in, " + toCheck.length + " to check)";
-      }
-      if (overlay) {
-        renderModalBody(overlay.querySelector(".my-asu-modal-body"), needed, toCheck);
-      }
-    }
-
-    reviewButton.addEventListener("click", openModal);
-
-    // Live updates. Listeners on the form catch Title / Weight / Max
-    // Marks (input events bubble); the editor box is watched
-    // separately because CKEditor edits its own contenteditable.
-    form.addEventListener("input", (event) => {
-      if (event.target === weightInput()) weightTouched = true;
-      refresh();
-    });
-    form.addEventListener("change", (event) => {
-      if (event.target === weightInput()) weightTouched = true;
-      if (event.target.id === "acceptOnline") onlineTouched = true;
-      if (event.target.name === "self_reviewable") selfTouched = true;
-      refresh();
-    });
-    const editable = descriptionEditable();
-    if (editable) {
-      new MutationObserver(refresh).observe(editable, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-      });
-      editable.addEventListener("keyup", refresh);
-    }
-
-    function fireChange(el) {
-      el.dispatchEvent(new Event("change", { bubbles: true }));
+    function setField(el, value) {
+      if (!el) return;
+      el.value = value;
+      fire(el, ["input", "change"]);
     }
     function setSelect(el, value) {
       if (!el) return;
       el.value = value;
-      fireChange(el);
+      fire(el, ["change"]);
     }
     // A switch is a hidden-ish checkbox driven by its label; click()
     // on the input toggles it and fires the same events a real click
@@ -4534,12 +4381,12 @@
     }
 
     function applyConstants() {
-      setSelect(part2.querySelector("#workTypeSelector"), "2"); // Summative Assessment Task
-      setSwitch(part2.querySelector("#courseManaged"), false); // Common Assessment off
-      setSwitch(part2.querySelector("#useDualMarkTypes"), true); // Dual Mark Types on
-      setSelect(part2.querySelector("#instructor-markType"), "3"); // Input: Total Mark
-      setSelect(part2.querySelector("#markType"), "1"); // Display: Percentage
-      setSelect(part2.querySelector('select[name="visibility"]'), "staffOnly"); // Feedback Visibility
+      setSelect(q("#workTypeSelector"), "2"); // Summative Assessment Task
+      setSwitch(q("#courseManaged"), false); // Common Assessment off
+      setSwitch(q("#useDualMarkTypes"), true); // Dual Mark Types on
+      setSelect(q("#instructor-markType"), "3"); // Input: Total Mark
+      setSelect(q("#markType"), "1"); // Display: Percentage
+      setSelect(q('select[name="visibility"]'), "staffOnly"); // Feedback Visibility
     }
 
     // Failure-path logging only. If the plugin reset a value after
@@ -4553,31 +4400,404 @@
       ];
       const bad = [];
       checks.forEach(([sel, want]) => {
-        const el = part2.querySelector(sel);
+        const el = q(sel);
         if (!el) return bad.push(sel + " (missing)");
         if (el.value !== want) {
-          el.value = want;
-          fireChange(el);
+          setSelect(el, want);
           if (el.value !== want) bad.push(sel);
         }
       });
-      const dual = part2.querySelector("#useDualMarkTypes");
+      const dual = q("#useDualMarkTypes");
       if (dual && !dual.checked) bad.push("#useDualMarkTypes");
-      const common = part2.querySelector("#courseManaged");
+      const common = q("#courseManaged");
       if (common && common.checked) bad.push("#courseManaged");
       if (bad.length) {
         console.warn("[UX tweaks] Autofill assessment setup: did not stick:", bad.join(", "));
       }
-      refresh();
-      openModal();
     }
 
+    // ---------------- wizard state ----------------
+    const STEP_NAMES = [
+      "Title",
+      "Description",
+      "Weight",
+      "Maximum Available Marks",
+      "Online submission",
+      "Self-reflection",
+      "Summary",
+    ];
+    const SELF_LABELS = {
+      none: "None",
+      "reflect-only": "Self-reflection",
+      full: "Self-reflection + Self-assessment",
+    };
+    const W = {
+      step: 0,
+      title: "",
+      desc: "",
+      descOwned: false, // the wizard has written the Description
+      descSkipped: false,
+      descError: false,
+      weight: "",
+      weightTouched: false,
+      max: "",
+      online: null, // "yes" | "no" | null (not chosen yet)
+      onlineChosen: false,
+      self: "none",
+    };
+    let overlay = null;
+    let descTimer = null;
+
+    // Weight and Online have defaults that can be a real answer, so
+    // they count as "set" only once the teacher has touched them (on
+    // the page or in the wizard; both fire these events).
+    form.addEventListener("input", (event) => {
+      if (event.target === weightEl()) W.weightTouched = true;
+    });
+    form.addEventListener("change", (event) => {
+      if (event.target === weightEl()) W.weightTouched = true;
+      if (event.target === onlineEl()) W.onlineChosen = true;
+    });
+
+    function loadFromPage() {
+      W.title = titleInput.value;
+      const w = weightEl();
+      W.weight = W.weightTouched && w ? w.value : "";
+      const m = maxEl();
+      W.max = m ? m.value : "";
+      const o = onlineEl();
+      if (o && o.value !== "0") W.online = "yes";
+      else W.online = W.onlineChosen ? "no" : null;
+      const s = selfEl();
+      W.self = s && s.value ? s.value : "none";
+      if (!W.descOwned) W.desc = "";
+    }
+
+    function descPreviewMode() {
+      return !W.descOwned && editorHasContent();
+    }
+
+    function firstEmptyStep() {
+      if (W.title.trim() === "") return 0;
+      if (!descPreviewMode() && W.desc.trim() === "" && !W.descSkipped) return 1;
+      if (W.weight === "") return 2;
+      if (W.max.trim() === "") return 3;
+      if (W.online === null) return 4;
+      return 6;
+    }
+
+    function flushDescription() {
+      if (descTimer === null) return;
+      clearTimeout(descTimer);
+      descTimer = null;
+      writeDescription();
+    }
+    function writeDescription() {
+      asuBridge({ op: "write", html: plainTextToEditorHtml(W.desc) }, (res) => {
+        W.descError = !res.ok;
+        if (!res.ok) {
+          console.warn("[UX tweaks] Autofill assessment setup: Description not written:", res.reason);
+          if (overlay) render();
+        }
+      });
+    }
+
+    function closeWizard() {
+      flushDescription();
+      if (!overlay) return;
+      overlay.remove();
+      overlay = null;
+      document.removeEventListener("keydown", onKey, true);
+      button.textContent = "Reopen setup wizard";
+    }
+    function onKey(event) {
+      if (event.key === "Escape") closeWizard();
+    }
+
+    function openWizard(step) {
+      loadFromPage();
+      W.step = step;
+      if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.className = "my-wiz-overlay";
+        overlay.addEventListener("click", (event) => {
+          if (event.target === overlay) closeWizard();
+        });
+        document.body.appendChild(overlay);
+        document.addEventListener("keydown", onKey, true);
+      }
+      render();
+    }
+
+    function go(step) {
+      flushDescription();
+      loadFromPage();
+      W.step = step;
+      render();
+    }
+
+    function el(tag, cls, text) {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+
+    function textBox(multiline, value, placeholder, onInput) {
+      const i = document.createElement(multiline ? "textarea" : "input");
+      if (multiline) i.rows = 5;
+      else i.type = "text";
+      i.className = "my-wiz-input";
+      i.value = value;
+      i.placeholder = placeholder;
+      i.addEventListener("input", () => onInput(i.value));
+      return i;
+    }
+    function numberBox(value, placeholder, onInput) {
+      const i = document.createElement("input");
+      i.type = "number";
+      i.min = "0";
+      i.className = "my-wiz-input";
+      i.value = value;
+      i.placeholder = placeholder;
+      i.addEventListener("input", () => onInput(i.value));
+      return i;
+    }
+    function choice(label, selected, onPick) {
+      const b = el("button", "my-wiz-choice" + (selected ? " my-wiz-selected" : ""), label);
+      b.type = "button";
+      b.addEventListener("click", onPick);
+      return b;
+    }
+
+    function summaryRows() {
+      const preview = descPreviewMode();
+      return [
+        { label: "Title", value: W.title.trim(), required: true, step: 0 },
+        {
+          label: "Description",
+          value: preview ? "(existing content kept)" : W.desc.trim(),
+          required: false,
+          step: 1,
+        },
+        { label: "Weight", value: W.weight === "" ? "" : W.weight + "%", required: true, step: 2 },
+        { label: "Maximum Available Marks", value: W.max.trim(), required: true, step: 3 },
+        {
+          label: "Online submission",
+          value: W.online === "yes" ? "Yes (Single, File)" : W.online === "no" ? "No (in-class)" : "",
+          required: false,
+          step: 4,
+        },
+        { label: "Self-reflection", value: SELF_LABELS[W.self] || W.self, required: false, step: 5 },
+      ];
+    }
+
+    function render() {
+      if (!overlay) return;
+      overlay.textContent = "";
+      const modal = el("div", "my-wiz-modal");
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-label", "Assessment setup");
+
+      const dots = el("div", "my-wiz-dots");
+      for (let n = 0; n < STEP_NAMES.length; n++) {
+        dots.appendChild(
+          el("div", "my-wiz-dot" + (n === W.step ? " my-wiz-on" : n < W.step ? " my-wiz-done" : ""))
+        );
+      }
+      modal.appendChild(dots);
+      modal.appendChild(el("p", "my-wiz-step", "Step " + (W.step + 1) + " of " + STEP_NAMES.length));
+
+      let focusEl = null;
+      let nextLabel = "Next";
+      const s = W.step;
+
+      if (s === 0) {
+        modal.appendChild(el("p", "my-wiz-q", "What's the assessment called?"));
+        modal.appendChild(el("p", "my-wiz-hint", "This becomes the Due Work title."));
+        focusEl = textBox(false, W.title, "e.g. Programming Task 1: Python", (v) => {
+          W.title = v;
+          setField(titleInput, v);
+        });
+        modal.appendChild(focusEl);
+      } else if (s === 1) {
+        modal.appendChild(el("p", "my-wiz-q", "Describe it for students"));
+        modal.appendChild(el("p", "my-wiz-hint", "Optional, but students see this."));
+        if (descPreviewMode()) {
+          const text = editorText();
+          const note = el(
+            "div",
+            "my-wiz-note",
+            "The Description already has content, so it's left alone. " +
+              (text ? "Starts: " + text.slice(0, 160) + (text.length > 160 ? "…" : "") : "")
+          );
+          modal.appendChild(note);
+          const edit = el("button", "my-wiz-link", "Edit on the page");
+          edit.type = "button";
+          edit.addEventListener("click", () => {
+            closeWizard();
+            const ed = descEditable();
+            if (ed) {
+              ed.scrollIntoView({ block: "center", behavior: "smooth" });
+              try {
+                ed.focus({ preventScroll: true });
+              } catch (err) {
+                // best effort
+              }
+            }
+          });
+          modal.appendChild(edit);
+        } else {
+          focusEl = textBox(true, W.desc, "What students need to know: the task, conditions, what to submit", (v) => {
+            W.desc = v;
+            W.descOwned = true;
+            W.descSkipped = false;
+            W.descError = false;
+            if (descTimer !== null) clearTimeout(descTimer);
+            descTimer = setTimeout(() => {
+              descTimer = null;
+              writeDescription();
+            }, 250);
+            nextBtn.textContent = v.trim() === "" ? "Skip" : "Next";
+          });
+          modal.appendChild(focusEl);
+          if (W.descError) {
+            modal.appendChild(
+              el("p", "my-wiz-error", "Couldn't write to the Description box. Type it on the page instead.")
+            );
+          }
+          if (W.desc.trim() === "") nextLabel = "Skip";
+        }
+      } else if (s === 2) {
+        modal.appendChild(el("p", "my-wiz-q", "What's the weighting?"));
+        modal.appendChild(el("p", "my-wiz-hint", "Use the figure from the assessment outline."));
+        focusEl = numberBox(W.weight, "e.g. 15", (v) => {
+          W.weight = v;
+          setField(weightEl(), v);
+        });
+        modal.appendChild(focusEl);
+      } else if (s === 3) {
+        modal.appendChild(el("p", "my-wiz-q", "How many marks in total?"));
+        modal.appendChild(
+          el("p", "my-wiz-hint", "Maximum Available Marks. It displays as a percentage.")
+        );
+        focusEl = numberBox(W.max, "e.g. 40", (v) => {
+          W.max = v;
+          setField(maxEl(), v);
+        });
+        modal.appendChild(focusEl);
+      } else if (s === 4) {
+        modal.appendChild(el("p", "my-wiz-q", "Will students submit on myCarey?"));
+        modal.appendChild(
+          el(
+            "p",
+            "my-wiz-hint",
+            "Choose No for an in-class assessment. Students get a notification if work isn't submitted on time."
+          )
+        );
+        modal.appendChild(
+          choice("Yes: online submission (Single, with File)", W.online === "yes", () => {
+            setSelect(onlineEl(), "1");
+            const files = q("#files");
+            if (files && !files.checked) files.click();
+            loadFromPage();
+            render();
+          })
+        );
+        modal.appendChild(
+          choice("No: in-class, no online submission", W.online === "no", () => {
+            setSelect(onlineEl(), "0");
+            loadFromPage();
+            render();
+          })
+        );
+      } else if (s === 5) {
+        modal.appendChild(el("p", "my-wiz-q", "Self-reflection?"));
+        modal.appendChild(
+          el("p", "my-wiz-hint", "Leave as None unless you want students to reflect.")
+        );
+        Object.keys(SELF_LABELS).forEach((key) => {
+          modal.appendChild(
+            choice(SELF_LABELS[key], W.self === key, () => {
+              setSelect(selfEl(), key);
+              loadFromPage();
+              render();
+            })
+          );
+        });
+      } else {
+        modal.appendChild(el("p", "my-wiz-q", "Check it over"));
+        modal.appendChild(
+          el("p", "my-wiz-hint", "Anything not set is flagged. Click a row to go back to it.")
+        );
+        const table = el("table", "my-wiz-sum");
+        summaryRows().forEach((row) => {
+          const tr = document.createElement("tr");
+          const label = document.createElement("td");
+          const link = el("button", "my-wiz-link", row.label);
+          link.type = "button";
+          link.addEventListener("click", () => go(row.step));
+          label.appendChild(link);
+          const val = el(
+            "td",
+            row.value ? "" : row.required ? "my-wiz-missing" : "my-wiz-check",
+            row.value ? row.value : row.required ? "Not set" : "Not set, worth checking"
+          );
+          tr.appendChild(label);
+          tr.appendChild(val);
+          table.appendChild(tr);
+        });
+        modal.appendChild(table);
+        modal.appendChild(
+          el(
+            "p",
+            "my-wiz-small",
+            "Also set for you: Summative Assessment Task, Common Assessment off, Dual Mark Types on (Total Mark in, Percentage out), Feedback Visibility: Staff Only. Similarity Check and other submission options stay on the page."
+          )
+        );
+        nextLabel = "Confirm and return to page";
+      }
+
+      const footer = el("div", "my-wiz-footer");
+      const back = el("button", "button small secondary", "Back");
+      back.type = "button";
+      back.style.visibility = s === 0 ? "hidden" : "visible";
+      back.addEventListener("click", () => go(s - 1));
+      const right = el("div", "my-wiz-footer-right");
+      const close = el("button", "button small secondary", "Close");
+      close.type = "button";
+      close.addEventListener("click", closeWizard);
+      const nextBtn = el("button", "button small", nextLabel);
+      nextBtn.type = "button";
+      nextBtn.addEventListener("click", () => {
+        if (s === 1 && !descPreviewMode() && W.desc.trim() === "") W.descSkipped = true;
+        if (s === STEP_NAMES.length - 1) closeWizard();
+        else go(s + 1);
+      });
+      right.appendChild(close);
+      right.appendChild(nextBtn);
+      footer.appendChild(back);
+      footer.appendChild(right);
+      modal.appendChild(footer);
+
+      overlay.appendChild(modal);
+      if (focusEl) focusEl.focus();
+      else nextBtn.focus();
+    }
+
+    let constantsApplied = false;
     button.addEventListener("click", () => {
-      applyConstants();
-      armed = true;
-      refresh();
-      // Schoolbox's plugin may re-render rows after our events.
-      setTimeout(verifyAssessmentAutofill, 250);
+      if (!constantsApplied) {
+        applyConstants();
+        constantsApplied = true;
+        button.textContent = "Reopen setup wizard";
+        openWizard(0);
+        // Schoolbox's plugin may re-render rows after our events.
+        setTimeout(verifyAssessmentAutofill, 250);
+        return;
+      }
+      loadFromPage();
+      openWizard(firstEmptyStep());
     });
   }
 
@@ -4636,12 +4856,15 @@ Once you have both, map each criterion to the correct capability, build the CSV,
     copilot: { label: "Copilot", url: "https://copilot.microsoft.com/", param: "q" },
   };
 
-  // Grading section of the new-assessment form: a button (and a
-  // platform picker, remembered in chrome.storage.sync) that copies
-  // the prompt above and opens the chosen AI site. Placed just before
-  // #rubric-builder-container, not inside it: that container is
-  // rendered by Vue, which would discard anything added inside. Sits
-  // just after it, i.e. under the Create manually / Upload buttons.
+  // Grading section of the new-assessment form: a quiet line of text
+  // under the Create manually / Upload buttons. The first time it
+  // reads "Convert it with AI" and opens a short list of assistants;
+  // after one is used it reads "Convert it with <name>" (one click)
+  // with a small caret to pick a different one. The choice is kept in
+  // chrome.storage.sync. Clicking copies the prompt above and opens
+  // that AI. Placed just after #rubric-builder-container, not inside
+  // it: that container is rendered by Vue, which would discard
+  // anything added inside.
   function addRubricAiButton() {
     const container = document.getElementById("rubric-builder-container");
     if (!container || !container.parentElement) return;
@@ -4650,67 +4873,46 @@ Once you have both, map each criterion to the correct capability, build the CSV,
     const wrap = document.createElement("div");
     wrap.id = "my-rubric-ai-wrap";
     wrap.className = "my-rubric-ai-wrap";
-
-    const select = document.createElement("select");
-    select.className = "my-rubric-ai-select";
-    select.setAttribute("aria-label", "AI assistant");
-    Object.keys(RUBRIC_AI_PLATFORMS).forEach((key) => {
-      const opt = document.createElement("option");
-      opt.value = key;
-      opt.textContent = RUBRIC_AI_PLATFORMS[key].label;
-      select.appendChild(opt);
-    });
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "button small my-rubric-ai-button";
-    button.textContent = "Make a rubric file with AI";
-
+    const line = document.createElement("div");
+    line.className = "my-rubric-ai-line";
     const note = document.createElement("div");
     note.className = "my-rubric-ai-note";
-
-    const caption = document.createElement("div");
-    caption.className = "my-rubric-ai-caption";
-    caption.textContent =
-      "Have a premade rubric that isn't in Schoolbox's format? Use this button to get AI to convert it for you.";
-
-    const controls = document.createElement("div");
-    controls.className = "my-rubric-ai-controls";
-    controls.appendChild(button);
-    controls.appendChild(select);
-
-    wrap.appendChild(caption);
-    wrap.appendChild(controls);
+    wrap.appendChild(line);
     wrap.appendChild(note);
-    // Placed under the Create manually / Upload buttons.
     container.insertAdjacentElement("afterend", wrap);
 
-    try {
-      chrome.storage.sync.get({ rubricAiPlatform: "claude" }, (result) => {
-        if (RUBRIC_AI_PLATFORMS[result.rubricAiPlatform]) {
-          select.value = result.rubricAiPlatform;
-        }
-      });
-    } catch (err) {
-      // Storage unavailable: the picker just defaults to Claude.
-    }
+    let last = "";
+    let menuOpen = false;
 
-    select.addEventListener("change", () => {
+    function closeMenu() {
+      if (!menuOpen) return;
+      menuOpen = false;
+      render();
+    }
+    document.addEventListener("click", (event) => {
+      if (menuOpen && !wrap.contains(event.target)) closeMenu();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeMenu();
+    });
+
+    function run(key) {
+      const platform = RUBRIC_AI_PLATFORMS[key];
+      if (!platform) return;
+      last = key;
+      menuOpen = false;
       try {
-        chrome.storage.sync.set({ rubricAiPlatform: select.value });
+        chrome.storage.sync.set({ rubricAiPlatform: key });
       } catch (err) {
         // Not remembered; harmless.
       }
-    });
-
-    button.addEventListener("click", () => {
-      const platform = RUBRIC_AI_PLATFORMS[select.value];
+      render();
       let copied = false;
       const finish = () => {
         note.textContent =
           (copied
-            ? "Prompt copied. "
-            : "Couldn't copy the prompt - open the AI and paste it manually. ") +
+            ? "Prompt copied, and " + platform.label + " is opening. "
+            : "Couldn't copy the prompt, so open " + platform.label + " and paste it manually. ") +
           "Attach your rubric there, ask for the CSV, then use \"Upload a Schoolbox format file\" above.";
         const url = platform.param
           ? platform.url + "?" + platform.param + "=" + encodeURIComponent(RUBRIC_AI_PROMPT)
@@ -4728,7 +4930,67 @@ Once you have both, map each criterion to the correct capability, build the CSV,
       } else {
         finish();
       }
-    });
+    }
+
+    function linkButton(cls, text, onClick) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = cls;
+      b.textContent = text;
+      b.addEventListener("click", onClick);
+      return b;
+    }
+
+    function render() {
+      line.textContent = "";
+      line.appendChild(
+        document.createTextNode("Have a rubric that isn't in Schoolbox's format? ")
+      );
+      if (!last) {
+        line.appendChild(
+          linkButton("my-rubric-ai-link", "Convert it with AI ▾", () => {
+            menuOpen = !menuOpen;
+            render();
+          })
+        );
+      } else {
+        line.appendChild(
+          linkButton(
+            "my-rubric-ai-link",
+            "Convert it with " + RUBRIC_AI_PLATFORMS[last].label,
+            () => run(last)
+          )
+        );
+        const caret = linkButton("my-rubric-ai-caret", "▾", () => {
+          menuOpen = !menuOpen;
+          render();
+        });
+        caret.setAttribute("aria-label", "Choose a different AI");
+        line.appendChild(caret);
+      }
+      if (menuOpen) {
+        const menu = document.createElement("div");
+        menu.className = "my-rubric-ai-menu";
+        Object.keys(RUBRIC_AI_PLATFORMS).forEach((key) => {
+          menu.appendChild(
+            linkButton("my-rubric-ai-item", RUBRIC_AI_PLATFORMS[key].label, () => run(key))
+          );
+        });
+        line.appendChild(menu);
+      }
+    }
+
+    render();
+    try {
+      chrome.storage.sync.get({ rubricAiPlatform: "" }, (result) => {
+        if (RUBRIC_AI_PLATFORMS[result.rubricAiPlatform]) {
+          last = result.rubricAiPlatform;
+          render();
+        }
+      });
+    } catch (err) {
+      // Storage unavailable: behaves as a first-time visit.
+    }
   }
 
   // Course import wizard, Learning Activities step (#import_assessments).

@@ -2460,59 +2460,17 @@ a.fc-timegrid-event.fc-timegrid-event-short .my-tt-links { top: 100%; }
 .my-duty-msg:empty { display: none; }
 
 /* ---------------------------------------------------------------
-   Autofill assessment setup (new Due Work form). Scoped under
-   .my-asu-* classes.
+   Autofill assessment setup wizard (new Due Work form) and the
+   "Convert it with AI" link under the rubric buttons. Scoped under
+   .my-asu-*, .my-wiz-* and .my-rubric-ai-* classes.
    --------------------------------------------------------------- */
 .my-asu-wrap {
   margin: 0.5rem 0 1rem;
 }
 .my-asu-button {
-  margin: 0 0.75rem 0 0;
-}
-input.my-asu-missing,
-.ck-editor.my-asu-missing {
-  outline: 2px solid #d93025;
-  outline-offset: 1px;
-  background-color: #fdecea;
-}
-
-select.my-asu-check,
-.ck-editor.my-asu-check {
-  outline: 2px solid #f0a000;
-  outline-offset: 1px;
-  background-color: #fff7e0;
-}
-.my-rubric-ai-wrap {
-  margin: 0.5rem 0 1rem;
-}
-.my-rubric-ai-caption {
-  font-size: 0.85rem;
-  color: #555;
-  margin-bottom: 0.4rem;
-}
-.my-rubric-ai-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.my-rubric-ai-button {
   margin: 0;
 }
-.my-rubric-ai-select {
-  display: inline-block;
-  width: auto;
-  margin: 0;
-}
-.my-rubric-ai-note {
-  margin-top: 0.4rem;
-  font-size: 0.9rem;
-  color: #444;
-}
-
-.my-asu-review {
-  margin: 0;
-}
-.my-asu-modal-overlay {
+.my-wiz-overlay {
   position: fixed;
   inset: 0;
   z-index: 100000;
@@ -2521,53 +2479,164 @@ select.my-asu-check,
   align-items: center;
   justify-content: center;
 }
-.my-asu-modal {
+.my-wiz-modal {
   background: #fff;
+  color: #222;
   border-radius: 8px;
   padding: 1.25rem 1.5rem;
-  width: min(30rem, 92vw);
-  max-height: 85vh;
+  width: min(32rem, 92vw);
+  max-height: 88vh;
   overflow-y: auto;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
 }
-.my-asu-modal h3 {
+.my-wiz-dots {
+  display: flex;
+  gap: 6px;
   margin: 0 0 0.75rem;
 }
-.my-asu-modal-heading {
-  margin: 0.75rem 0 0.35rem;
-  font-size: 1rem;
+.my-wiz-dot {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: #d8d8d8;
 }
-.my-asu-modal-heading.my-asu-needed { color: #b3261e; }
-.my-asu-modal-heading.my-asu-checking { color: #8a5a00; }
-.my-asu-modal-empty {
-  margin: 0 0 0.5rem;
-  color: #555;
+.my-wiz-dot.my-wiz-done { background: #888; }
+.my-wiz-dot.my-wiz-on { background: #1e6980; }
+.my-wiz-step {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  color: #666;
 }
-.my-asu-modal-list {
-  list-style: none;
+.my-wiz-q {
+  margin: 0 0 0.25rem;
+  font-size: 1.15rem;
+  font-weight: 500;
+}
+.my-wiz-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: #666;
+}
+.my-wiz-input {
+  width: 100%;
   margin: 0;
-  padding: 0;
 }
-.my-asu-modal-item {
+.my-wiz-choice {
   display: block;
   width: 100%;
   text-align: left;
+  margin: 0 0 0.5rem;
+  padding: 0.6rem 0.75rem;
   background: #fff;
-  border: 1px solid #ccc;
-  border-left-width: 4px;
+  color: #222;
+  border: 1px solid #c8c8c8;
   border-radius: 4px;
-  padding: 0.5rem 0.75rem;
-  margin: 0 0 0.4rem;
   cursor: pointer;
 }
-.my-asu-modal-item.my-asu-needed { border-left-color: #d93025; }
-.my-asu-modal-item.my-asu-checking { border-left-color: #f0a000; }
-.my-asu-modal-item:hover { background: #f6f6f6; }
-.my-asu-modal-item span {
-  display: block;
-  font-size: 0.85rem;
-  color: #555;
+.my-wiz-choice:hover { background: #f4f6f8; }
+.my-wiz-choice.my-wiz-selected {
+  border: 2px solid #1e6980;
+  background: #e8f2f5;
 }
-.my-asu-modal-close {
-  margin: 0.75rem 0 0;
+.my-wiz-note {
+  background: #f1f1f1;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+}
+.my-wiz-error {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  color: #b3261e;
+}
+.my-wiz-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: #1e6980;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+}
+.my-wiz-sum {
+  width: 100%;
+  font-size: 0.9rem;
+  border-collapse: collapse;
+}
+.my-wiz-sum td {
+  padding: 0.4rem 0;
+  border-top: 1px solid #e3e3e3;
+  vertical-align: top;
+}
+.my-wiz-sum td:first-child { width: 42%; }
+.my-wiz-missing { color: #b3261e; }
+.my-wiz-check { color: #8a5a00; }
+.my-wiz-small {
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  color: #666;
+}
+.my-wiz-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.25rem;
+}
+.my-wiz-footer .button { margin: 0; }
+.my-wiz-footer-right {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.my-rubric-ai-wrap {
+  margin: 0.5rem 0 1rem;
+}
+.my-rubric-ai-line {
+  position: relative;
+  font-size: 0.8rem;
+  color: #777;
+}
+.my-rubric-ai-link,
+.my-rubric-ai-caret {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font-size: inherit;
+  color: #2e5f78;
+  cursor: pointer;
+  display: inline;
+}
+.my-rubric-ai-link { text-decoration: underline; }
+.my-rubric-ai-caret { margin-left: 0.2rem; }
+.my-rubric-ai-menu {
+  position: absolute;
+  left: 0;
+  top: 1.4rem;
+  z-index: 50;
+  min-width: 9rem;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.2rem 0;
+}
+.my-rubric-ai-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0.35rem 0.75rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #222;
+  cursor: pointer;
+}
+.my-rubric-ai-item:hover { background: #eef3f7; }
+.my-rubric-ai-note {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #777;
 }

@@ -276,3 +276,76 @@
     document.dispatchEvent(new Event("my-tpl-response"));
   });
 })();
+
+// ---------------------------------------------------------------
+// Assessment setup wizard (content.js, addAssessmentSetupAutofill):
+// writes the new-assessment form's Description editor. Same reason as
+// the blocks above - the CKEditor instance only exists in this (MAIN)
+// world. Request in data-request ({id, op, html}), reply in
+// data-response, same transport as the pastoral Templates bridge.
+//
+//  - "write": {ok, reason}  setData(html) then EDITOR__CHECK_DATA
+//
+// The editor is found through the instance CKEditor 5 attaches to its
+// own editable (ckeditorInstance), falling back to window.sbProps.editors
+// matched by its source element. NOT confirmed live on this page.
+// ---------------------------------------------------------------
+(function () {
+  const BRIDGE_ID = "my-asu-bridge";
+
+  function findEditor() {
+    try {
+      const editable = document.querySelector(
+        "#assessment-description ~ .ck-editor .ck-editor__editable"
+      );
+      if (editable && editable.ckeditorInstance) return editable.ckeditorInstance;
+      const eds = window.sbProps && window.sbProps.editors;
+      if (eds) {
+        const keys = Object.keys(eds);
+        for (let i = 0; i < keys.length; i++) {
+          const ed = eds[keys[i]];
+          if (ed && ed.sourceElement && ed.sourceElement.id === "assessment-description") {
+            return ed;
+          }
+        }
+      }
+    } catch (err) {
+      return null;
+    }
+    return null;
+  }
+
+  function handle(req) {
+    if (req.op === "write") {
+      const ed = findEditor();
+      if (!ed) return { ok: false, reason: "no-editor" };
+      try {
+        ed.setData(String(req.html || ""));
+        if (ed.sourceElement) {
+          ed.sourceElement.dispatchEvent(new CustomEvent("EDITOR__CHECK_DATA"));
+        }
+      } catch (err) {
+        return { ok: false, reason: "set-failed" };
+      }
+      return { ok: true };
+    }
+    return { ok: false, reason: "bad-op" };
+  }
+
+  document.addEventListener("my-asu-request", () => {
+    const bridge = document.getElementById(BRIDGE_ID);
+    if (!bridge) return;
+    let req = null;
+    try {
+      req = JSON.parse(bridge.getAttribute("data-request") || "null");
+    } catch (err) {
+      req = null;
+    }
+    const result = req ? handle(req) : { ok: false, reason: "bad-request" };
+    bridge.setAttribute(
+      "data-response",
+      JSON.stringify({ id: req && req.id, ...result })
+    );
+    document.dispatchEvent(new Event("my-asu-response"));
+  });
+})();
