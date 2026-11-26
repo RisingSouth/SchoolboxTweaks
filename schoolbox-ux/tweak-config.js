@@ -307,7 +307,7 @@ const CHANGELOG = [
       },
       {
         title: "Rubric file with AI",
-        text: "New button in the Grading section of the assessment form. It copies a ready-made prompt, opens your chosen AI (Claude, ChatGPT, Copilot or Gemini) and tells you to attach your rubric there. The AI gives you a CSV to import with \"Upload a Schoolbox format file\". Turn it off in the Assessments group.",
+        text: "New button in the Grading section of the assessment form. It copies a ready-made prompt, opens your chosen AI (Claude, ChatGPT or Copilot) and tells you to attach your rubric there. The AI gives you a CSV to import with \"Upload a Schoolbox format file\". Turn it off in the Assessments group.",
       },
     ],
   },

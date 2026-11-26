@@ -4522,15 +4522,14 @@ To get started, please ask me:
 
 Once you have both, map each criterion to the correct capability, build the CSV, and provide a downloadable file.`;
 
-  // url: where to open; prefill: whether that site accepts the prompt
-  // in the address (otherwise the prompt is only copied to the
-  // clipboard to paste). The prefill parameters are NOT confirmed
-  // live for every site - the clipboard copy is the fallback.
+  // url: where to open; param: the query parameter that pre-fills the
+  // prompt (null would mean clipboard only). The prefill parameters
+  // are NOT confirmed live for every site - the clipboard copy is the
+  // fallback. Gemini is left out for now: it has no prefill option.
   const RUBRIC_AI_PLATFORMS = {
     claude: { label: "Claude", url: "https://claude.ai/new", param: "q" },
     chatgpt: { label: "ChatGPT", url: "https://chatgpt.com/", param: "q" },
     copilot: { label: "Copilot", url: "https://copilot.microsoft.com/", param: "q" },
-    gemini: { label: "Gemini", url: "https://gemini.google.com/app", param: null },
   };
 
   // Grading section of the new-assessment form: a button (and a
