@@ -2517,9 +2517,25 @@ a.fc-timegrid-event.fc-timegrid-event-short .my-tt-links { top: 100%; }
   font-size: 0.85rem;
   color: #666;
 }
-.my-wiz-input {
+.my-wiz-modal .my-wiz-input {
   width: 100%;
   margin: 0;
+  height: auto;
+  padding: 0.5rem 0.6rem;
+  background: #fff !important;
+  color: #222 !important;
+  border: 1px solid #b8b8b8;
+  border-radius: 4px;
+  box-shadow: none;
+  font-size: 0.95rem;
+}
+.my-wiz-modal .my-wiz-input::placeholder {
+  color: #999;
+}
+.my-wiz-modal .my-wiz-input:focus {
+  border-color: #1e6980;
+  outline: 2px solid rgba(30, 105, 128, 0.25);
+  outline-offset: 0;
 }
 .my-wiz-choice {
   display: block;
@@ -2584,7 +2600,28 @@ a.fc-timegrid-event.fc-timegrid-event-short .my-tt-links { top: 100%; }
   align-items: center;
   margin-top: 1.25rem;
 }
-.my-wiz-footer .button { margin: 0; }
+.my-wiz-modal .my-wiz-btn {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  background: #fff !important;
+  color: #333 !important;
+  border: 1px solid #b8b8b8;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.my-wiz-modal .my-wiz-btn:hover {
+  background: #f1f1f1 !important;
+}
+.my-wiz-modal .my-wiz-btn.my-wiz-btn-primary {
+  background: #1e6980 !important;
+  color: #fff !important;
+  border-color: #1e6980;
+}
+.my-wiz-modal .my-wiz-btn.my-wiz-btn-primary:hover {
+  background: #17546a !important;
+}
 .my-wiz-footer-right {
   display: flex;
   gap: 0.5rem;

@@ -4759,15 +4759,15 @@
       }
 
       const footer = el("div", "my-wiz-footer");
-      const back = el("button", "button small secondary", "Back");
+      const back = el("button", "my-wiz-btn", "Back");
       back.type = "button";
       back.style.visibility = s === 0 ? "hidden" : "visible";
       back.addEventListener("click", () => go(s - 1));
       const right = el("div", "my-wiz-footer-right");
-      const close = el("button", "button small secondary", "Close");
+      const close = el("button", "my-wiz-btn", "Close");
       close.type = "button";
       close.addEventListener("click", closeWizard);
-      const nextBtn = el("button", "button small", nextLabel);
+      const nextBtn = el("button", "my-wiz-btn my-wiz-btn-primary", nextLabel);
       nextBtn.type = "button";
       nextBtn.addEventListener("click", () => {
         if (s === 1 && !descPreviewMode() && W.desc.trim() === "") W.descSkipped = true;
