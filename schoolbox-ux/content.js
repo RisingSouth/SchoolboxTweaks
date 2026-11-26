@@ -4640,7 +4640,8 @@ Once you have both, map each criterion to the correct capability, build the CSV,
   // platform picker, remembered in chrome.storage.sync) that copies
   // the prompt above and opens the chosen AI site. Placed just before
   // #rubric-builder-container, not inside it: that container is
-  // rendered by Vue, which would discard anything added inside.
+  // rendered by Vue, which would discard anything added inside. Sits
+  // just after it, i.e. under the Create manually / Upload buttons.
   function addRubricAiButton() {
     const container = document.getElementById("rubric-builder-container");
     if (!container || !container.parentElement) return;
@@ -4668,10 +4669,21 @@ Once you have both, map each criterion to the correct capability, build the CSV,
     const note = document.createElement("div");
     note.className = "my-rubric-ai-note";
 
-    wrap.appendChild(button);
-    wrap.appendChild(select);
+    const caption = document.createElement("div");
+    caption.className = "my-rubric-ai-caption";
+    caption.textContent =
+      "Have a premade rubric that isn't in Schoolbox's format? Use this button to get AI to convert it for you.";
+
+    const controls = document.createElement("div");
+    controls.className = "my-rubric-ai-controls";
+    controls.appendChild(button);
+    controls.appendChild(select);
+
+    wrap.appendChild(caption);
+    wrap.appendChild(controls);
     wrap.appendChild(note);
-    container.insertAdjacentElement("beforebegin", wrap);
+    // Placed under the Create manually / Upload buttons.
+    container.insertAdjacentElement("afterend", wrap);
 
     try {
       chrome.storage.sync.get({ rubricAiPlatform: "claude" }, (result) => {

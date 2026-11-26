@@ -2483,10 +2483,20 @@ select.my-asu-check,
   background-color: #fff7e0;
 }
 .my-rubric-ai-wrap {
-  margin: 0 0 1rem;
+  margin: 0.5rem 0 1rem;
+}
+.my-rubric-ai-caption {
+  font-size: 0.85rem;
+  color: #555;
+  margin-bottom: 0.4rem;
+}
+.my-rubric-ai-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 .my-rubric-ai-button {
-  margin: 0 0.5rem 0 0;
+  margin: 0;
 }
 .my-rubric-ai-select {
   display: inline-block;
